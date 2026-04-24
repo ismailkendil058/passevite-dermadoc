@@ -15,6 +15,7 @@ import {
   ChevronRight,
   ArrowRight,
   ShoppingBag,
+  MessageCircle,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -259,8 +260,12 @@ const Website = () => {
             <div className="space-y-6 flex flex-col items-center">
               <h4 className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#8A9A8A]">Socials</h4>
               <div className="flex justify-center gap-6">
-                <Instagram className="h-5 w-5 text-[#2A2A2A] hover:text-[#8A9A8A]" />
-                <Star className="h-5 w-5 text-[#2A2A2A] hover:text-[#8A9A8A]" />
+                <a href="https://instagram.com/dermadoc_clinic" target="_blank" rel="noopener noreferrer" className="transition-transform hover:scale-110">
+                  <Instagram className="h-5 w-5 text-[#2A2A2A] hover:text-[#8A9A8A] transition-colors" />
+                </a>
+                <a href="https://wa.me/213554029732" target="_blank" rel="noopener noreferrer" className="transition-transform hover:scale-110">
+                  <MessageCircle className="h-5 w-5 text-[#2A2A2A] hover:text-[#8A9A8A] transition-colors" />
+                </a>
               </div>
             </div>
           </div>
@@ -277,7 +282,7 @@ const Website = () => {
                 {/* Stylized Map Placeholder - High End Look */}
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="text-center space-y-3">
-                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white text-[#8A9A8A] shadow-lg group-hover:scale-110 transition-transform duration-500">
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white text-[#8A9A8A] shadow-lg transition-transform duration-500">
                       <MapPin className="h-6 w-6" />
                     </div>
                     <p className="font-serif text-xl sm:text-2xl font-bold tracking-tighter text-[#2A2A2A] uppercase">Trouvez Dermadoc</p>
