@@ -55,6 +55,7 @@ const timeSlots = [
 const Website = () => {
   const isMobile = useIsMobile();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [introStage, setIntroStage] = useState<'showing' | 'fading' | 'hidden'>('showing');
 
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
@@ -63,7 +64,12 @@ const Website = () => {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-
+  useEffect(() => {
+    // Keep intro visible for 4.5s (UI/UX loading phase), then fade out for 1s
+    const timer1 = setTimeout(() => setIntroStage('fading'), 4300);
+    const timer2 = setTimeout(() => setIntroStage('hidden'), 5300);
+    return () => { clearTimeout(timer1); clearTimeout(timer2); };
+  }, []);
 
   const bookingSummary = useMemo(() => {
     if (!selectedDate || !selectedTime) return null;
@@ -82,6 +88,40 @@ const Website = () => {
 
   return (
     <div className="min-h-screen bg-[#EFEBE6] text-[#2A2A2A] font-sans selection:bg-[#8A9A8A]/30 overflow-x-hidden">
+      {/* Intro Overlay - Premium 5s Experience */}
+      {introStage !== 'hidden' && (
+        <div
+          className={cn(
+            "fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#EFEBE6] transition-opacity duration-1000",
+            introStage === 'fading' ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          )}
+        >
+          <div className="flex flex-col items-center justify-center h-full w-full max-w-lg px-6 gap-12">
+            <div className="relative animate-fade-in flex flex-col items-center gap-10">
+              <img
+                src="/Untitled-1.png"
+                alt="Dermadoc Logo"
+                className="h-24 sm:h-32 opacity-90 animate-float"
+                style={{ animationDuration: '4s' }}
+              />
+              <div className="text-center space-y-6 animate-slide-up" style={{ animationDelay: '0.5s', animationFillMode: 'both' }}>
+                <h2 className="flex flex-col text-[#2A2A2A]">
+                  <span className="font-serif text-xl sm:text-3xl font-light tracking-widest uppercase mb-2">Bienvenue chez</span>
+                  <span className="font-serif text-[4.5rem] sm:text-[7rem] leading-[0.8] font-bold tracking-tighter lowercase">dermadoc</span>
+                </h2>
+                <p className="font-serif text-xl sm:text-3xl text-[#4A4A4A] italic font-light opacity-90">
+                  L'excellence dermatologique & esthétique <br /> au cœur d'Alger
+                </p>
+              </div>
+            </div>
+
+            {/* Elegant minimalist loading line */}
+            <div className="w-48 h-[1px] bg-[#8A9A8A]/20 mt-8 overflow-hidden rounded-full animate-fade-in" style={{ animationDelay: '1.2s', animationFillMode: 'both' }}>
+              <div className="h-full bg-[#2A2A2A] animate-pan" style={{ width: '40%', animationDuration: '1.5s' }} />
+            </div>
+          </div>
+        </div>
+      )}
       {/* Glassmorphic Nav */}
       <nav className="fixed top-6 left-1/2 z-50 -translate-x-1/2 w-[90%] max-w-5xl rounded-full border border-white/20 bg-white/10 backdrop-blur-md px-6 py-3 sm:px-8">
         <div className="flex items-center justify-center gap-3 py-1">
