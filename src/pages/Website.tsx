@@ -93,10 +93,10 @@ const Website = () => {
       {/* Mobile Menu Overlay */}
       {isMenuOpen && (
         <div className="fixed inset-0 z-40 bg-[#EFEBE6] pt-32 px-8 flex flex-col gap-6 text-3xl font-serif text-[#2A2A2A] md:hidden animate-fade-in">
-          <a href="#" onClick={() => setIsMenuOpen(false)}>About us</a>
-          <a href="#services" onClick={() => setIsMenuOpen(false)}>Services</a>
-          <a href="#booking" onClick={() => setIsMenuOpen(false)}>Booking</a>
-          <a href="#" onClick={() => setIsMenuOpen(false)}>Contact</a>
+          <a href="#" onClick={() => setIsMenuOpen(false)}>La Clinique <span className="text-sm opacity-50 block">العيادة</span></a>
+          <a href="#services" onClick={() => setIsMenuOpen(false)}>Nos Services <span className="text-sm opacity-50 block">خدماتنا</span></a>
+          <a href="#booking" onClick={() => setIsMenuOpen(false)}>Réservation <span className="text-sm opacity-50 block">الحجز</span></a>
+          <a href="#" onClick={() => setIsMenuOpen(false)}>Contact <span className="text-sm opacity-50 block">اتصل بنا</span></a>
         </div>
       )}
 
@@ -123,7 +123,10 @@ const Website = () => {
               </p>
               <div className="pt-4 sm:pt-8">
                 <Button asChild className="h-16 sm:h-20 px-10 sm:px-16 rounded-full bg-white text-[#2A2A2A] text-lg sm:text-xl font-medium hover:bg-[#8A9A8A] hover:text-white transition-all shadow-2xl border-none">
-                  <a href="#booking">Réserver maintenant</a>
+                  <a href="#booking" className="flex items-center gap-2">
+                    <span>Réserver maintenant</span>
+                    <span className="opacity-70 text-sm">/ احجز الآن</span>
+                  </a>
                 </Button>
               </div>
             </div>
@@ -153,9 +156,12 @@ const Website = () => {
         <section id="booking" className="grid gap-16 lg:grid-cols-[1fr_minmax(400px,0.8fr)] items-start pt-20 text-center">
           <div className="space-y-12">
             <div className="space-y-4">
-              <h2 className="font-serif text-5xl sm:text-7xl font-light leading-tight">Plan your <br /><span className="italic">visit</span></h2>
+              <h2 className="font-serif text-5xl sm:text-7xl font-light leading-tight">
+                Planifiez votre <br /><span className="italic">visite</span>
+                <span className="block text-2xl sm:text-3xl mt-4 opacity-40">خطط لزيارتك</span>
+              </h2>
               <p className="max-w-md mx-auto text-sm sm:text-base text-[#4A4A4A] font-light">
-                Réservez votre consultation en quelques instants. Notre service de conciergerie vous rappellera pour finaliser l'horaire.
+                Réservez votre consultation d'exception en quelques instants. Notre service de conciergerie vous contactera afin de finaliser votre rendez-vous.
               </p>
             </div>
 
@@ -167,17 +173,17 @@ const Website = () => {
               {!isSubmitted ? (
                 <form className="space-y-8" onSubmit={handleSubmit}>
                   <div className="space-y-2 text-center">
-                    <Label className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#8A9A8A]">Name</Label>
+                    <Label className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#8A9A8A]">Nom Complet / الاسم الكامل</Label>
                     <Input
                       value={fullName}
                       onChange={e => setFullName(e.target.value)}
                       className="bg-transparent border-0 border-b border-[#8A9A8A]/20 px-0 rounded-none h-10 text-base text-center focus-visible:ring-0 focus-visible:border-[#8A9A8A] transition-all placeholder:text-gray-300"
-                      placeholder="Full name"
+                      placeholder="Votre nom complet"
                       required
                     />
                   </div>
                   <div className="space-y-2 text-center">
-                    <Label className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#8A9A8A]">Phone</Label>
+                    <Label className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#8A9A8A]">Téléphone / رقم الهاتف</Label>
                     <Input
                       type="tel"
                       value={phone}
@@ -190,7 +196,7 @@ const Website = () => {
 
                   <div className="space-y-8">
                     <div className="space-y-4">
-                      <Label className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#8A9A8A]">Choose Consultation Date</Label>
+                      <Label className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#8A9A8A]">Date de Consultation / تاريخ الاستشارة</Label>
                       <div className="flex justify-center bg-[#8A9A8A]/5 rounded-3xl p-4">
                         <Calendar
                           mode="single"
@@ -203,7 +209,7 @@ const Website = () => {
                     </div>
 
                     <div className="space-y-4 text-center">
-                      <Label className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#8A9A8A]">Select Preferred Time</Label>
+                      <Label className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#8A9A8A]">Heure Souhaitée / الوقت المفضل</Label>
                       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
                         {timeSlots.map(t => (
                           <button
@@ -222,8 +228,8 @@ const Website = () => {
                     </div>
                   </div>
 
-                  <Button type="submit" disabled={isSubmitting} className="h-16 w-full rounded-full bg-[#2A2A2A] text-white text-lg font-medium hover:bg-[#8A9A8A] transition-all shadow-xl shadow-black/5">
-                    {isSubmitting ? 'Processing...' : 'Confirm Request'}
+                  <Button type="submit" disabled={isSubmitting} className="h-20 sm:h-16 w-full rounded-full bg-[#2A2A2A] text-white text-lg font-medium hover:bg-[#8A9A8A] transition-all shadow-xl shadow-black/5 flex-col sm:flex-row gap-1 sm:gap-2">
+                    <span>{isSubmitting ? 'Traitement en cours...' : 'Confirmer la Demande'}</span>
                   </Button>
                 </form>
               ) : (
@@ -231,14 +237,15 @@ const Website = () => {
                   <div className="mx-auto h-20 w-20 rounded-full bg-[#8A9A8A]/10 flex items-center justify-center text-[#8A9A8A]">
                     <CheckCircle2 className="h-10 w-10" />
                   </div>
-                  <div className="space-y-4">
-                    <h3 className="font-serif text-4xl">Thank you.</h3>
-                    <p className="text-[#4A4A4A] leading-relaxed">
-                      Our team will call you at <strong>{phone}</strong> to confirm your appointment for {bookingSummary}.
+                  <div className="space-y-6">
+                    <h3 className="font-serif text-4xl">Nous vous remercions. <span className="block mt-2 text-2xl opacity-60">شكراً لك</span></h3>
+                    <p className="text-[#4A4A4A] leading-relaxed max-w-md mx-auto">
+                      Notre équipe de conciergerie vous contactera au <strong>{phone}</strong> pour confirmer votre rendez-vous d'exception du {bookingSummary}.
+                      <span className="block mt-4 opacity-70">سيتصل بك فريقنا لتأكيد موعدك</span>
                     </p>
                   </div>
-                  <Button variant="outline" onClick={() => setIsSubmitted(false)} className="rounded-full border-[#8A9A8A] text-[#8A9A8A] px-10">
-                    Book another
+                  <Button variant="outline" onClick={() => setIsSubmitted(false)} className="rounded-full border-[#8A9A8A] text-[#8A9A8A] px-10 h-12">
+                    Nouvelle Réservation / حجز آخر
                   </Button>
                 </div>
               )}
@@ -253,12 +260,12 @@ const Website = () => {
           <div className="grid gap-12 sm:grid-cols-2 border-b border-[#EFEBE6] pb-12 mb-12">
             <div className="space-y-6 flex flex-col items-center">
               <span className="font-serif text-4xl font-bold tracking-tighter">dermadoc</span>
-              <p className="text-xs text-[#7A7A7A] leading-relaxed max-w-[200px]">
-                Prestige dermatology and aesthetic medicine in the heart of Bab Ezzouar.
+              <p className="text-xs text-[#7A7A7A] leading-relaxed max-w-[280px]">
+                Dermatologie et médecine esthétique de prestige au cœur de Bab Ezzouar.
               </p>
             </div>
             <div className="space-y-6 flex flex-col items-center">
-              <h4 className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#8A9A8A]">Socials</h4>
+              <h4 className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#8A9A8A]">Réseaux Sociaux / الشبكات الاجتماعية</h4>
               <div className="flex justify-center gap-6">
                 <a href="https://instagram.com/dermadoc_clinic" target="_blank" rel="noopener noreferrer" className="transition-transform hover:scale-110">
                   <Instagram className="h-5 w-5 text-[#2A2A2A] hover:text-[#8A9A8A] transition-colors" />
@@ -285,7 +292,9 @@ const Website = () => {
                     <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white text-[#8A9A8A] shadow-lg transition-transform duration-500">
                       <MapPin className="h-6 w-6" />
                     </div>
-                    <p className="font-serif text-xl sm:text-2xl font-bold tracking-tighter text-[#2A2A2A] uppercase">Trouvez Dermadoc</p>
+                    <p className="font-serif text-xl sm:text-2xl font-bold tracking-tighter text-[#2A2A2A] uppercase">
+                      Découvrez Dermadoc
+                    </p>
                     <p className="text-[10px] uppercase tracking-[0.3em] text-[#8A9A8A]">{clinic.location}</p>
                   </div>
                   {/* Abstract Grid Overlay */}

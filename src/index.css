@@ -45,7 +45,7 @@ All colors MUST be HSL.
     --sage-cream: 36 15% 91%;
     --sage-charcoal: 0 0% 15%;
 
-    --background: var(--sage-cream);
+    --background: 0 0% 100%;
     --foreground: var(--sage-charcoal);
 
     --primary: var(--sage-green);
