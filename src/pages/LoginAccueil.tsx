@@ -28,10 +28,10 @@ const LoginAccueil = () => {
       return;
     }
 
-    if (data?.user?.role === 'receptionist') {
+    if (data?.user?.role === 'receptionist' || data?.user?.role === 'manager') {
       navigate('/accueil');
     } else {
-      toast.error('Accès refusé. Ce portail est réservé à l\'accueil.');
+      toast.error('Accès refusé. Ce portail est réservé au personnel autorisé.');
     }
   };
 

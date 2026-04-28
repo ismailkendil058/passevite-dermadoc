@@ -92,7 +92,7 @@ const Website = () => {
       const appointmentAt = new Date(selectedDate);
       appointmentAt.setHours(parseInt(hours), parseInt(minutes), 0, 0);
 
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('website')
         .insert([{
           client_name: fullName,

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -30,6 +30,7 @@ interface CompletedClient {
     tranche_paid: number;
     completed_at: string;
     doctor_id: string;
+    notes?: string;
 }
 
 interface Appointment {
@@ -50,8 +51,6 @@ interface Doctor {
 }
 
 const Rendezvous = () => {
-    useAuth();
-
     const [clients, setClients] = useState<CompletedClient[]>([]);
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -68,10 +67,30 @@ const Rendezvous = () => {
     const [newApptDoctor, setNewApptDoctor] = useState('');
     const [newApptNotes, setNewApptNotes] = useState('');
     const [editingApptId, setEditingApptId] = useState<string | null>(null);
+    const { user, userRole, signOut } = useAuth();
+    const [editingVisit, setEditingVisit] = useState<CompletedClient | null>(null);
+    const [isAddVisitOpen, setIsAddVisitOpen] = useState(false);
+    const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+    const [newVisitData, setNewVisitData] = useState<Partial<CompletedClient>>({
+        client_name: '',
+        phone: '',
+        treatment: '',
+        total_amount: 0,
+        tranche_paid: 0,
+        doctor_id: '',
+        notes: '',
+        state: 'N'
+    });
+
+    const fetchActiveSession = async () => {
+        const { data } = await supabase.from('sessions').select('id').eq('is_active', true).limit(1).maybeSingle();
+        if (data) setActiveSessionId(data.id);
+    };
 
     const fetchInitialData = async () => {
         setLoading(true);
         try {
+            await fetchActiveSession();
             // Fetch Appointments
             const { data: apptsData } = await supabase
                 .from('appointments')
@@ -91,17 +110,80 @@ const Rendezvous = () => {
                 }
             }
         } catch (error) {
-            console.error('Error fetching data:', error);
+            console.error('Error fetching initial data:', error);
             toast.error('Erreur lors du chargement des données');
         } finally {
             setLoading(false);
         }
     };
 
+    const handleSaveVisit = async (visit: Partial<CompletedClient>) => {
+        if (!visit.client_name || !visit.phone || !visit.treatment || !visit.total_amount) {
+            toast.error('Veuillez remplir les champs obligatoires');
+            return;
+        }
+
+        const dataToSave: any = {
+            client_name: visit.client_name,
+            phone: visit.phone,
+            treatment: visit.treatment,
+            total_amount: Number(visit.total_amount),
+            tranche_paid: Number(visit.tranche_paid || 0),
+            doctor_id: visit.doctor_id || null,
+            notes: visit.notes || null,
+            completed_at: visit.completed_at || new Date().toISOString(),
+            state: visit.state || 'N',
+            receptionist_id: user?.id,
+            session_id: activeSessionId,
+            client_id: visit.client_id || `ADM-${Date.now()}`
+        };
+
+        try {
+            let error;
+            if (visit.id) {
+                const { error: err } = await supabase.from('completed_clients').update(dataToSave).eq('id', visit.id);
+                error = err;
+            } else {
+                const { error: err } = await supabase.from('completed_clients').insert(dataToSave);
+                error = err;
+            }
+
+            if (error) throw error;
+
+            toast.success('Enregistré avec succès');
+            setIsAddVisitOpen(false);
+            setEditingVisit(null);
+            fetchInitialData();
+        } catch (error) {
+            console.error('Error saving visit:', error);
+            toast.error('Erreur lors de l\'enregistrement');
+        }
+    };
+
+    const handleDeleteVisit = async (visitId: string) => {
+        if (!window.confirm('Voulez-vous vraiment supprimer cette visite ?')) return;
+
+        try {
+            const { error } = await supabase
+                .from('completed_clients')
+                .delete()
+                .eq('id', visitId);
+
+            if (error) throw error;
+
+            toast.success('Visite supprimée');
+            fetchInitialData();
+            if (viewingClient && viewingClient.id === visitId) {
+                setViewingClient(null);
+            }
+        } catch (error) {
+            console.error('Error deleting visit:', error);
+            toast.error('Erreur lors de la suppression');
+        }
+    };
+
     useEffect(() => {
         fetchInitialData();
-
-        // Real-time subscription for appointments
         const channel = supabase
             .channel('appointments-changes')
             .on(
@@ -423,14 +505,36 @@ const Rendezvous = () => {
 
                     <TabsContent value="clients" className="mt-6 animate-in fade-in slide-in-from-bottom-2">
                         <div className="space-y-4">
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    placeholder="Rechercher un patient (nom ou téléphone)..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="pl-10 h-12 rounded-xl"
-                                />
+                            <div className="flex flex-col sm:flex-row gap-4 items-center">
+                                <div className="relative flex-1">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                    <Input
+                                        placeholder="Rechercher un patient (nom ou téléphone)..."
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className="pl-10 h-12 rounded-xl"
+                                    />
+                                </div>
+                                {userRole === 'manager' && (
+                                    <Button
+                                        className="w-full sm:w-auto h-12 rounded-xl px-6 gap-2 shadow-lg shadow-primary/20"
+                                        onClick={() => {
+                                            setNewVisitData({
+                                                client_name: '',
+                                                phone: '',
+                                                treatment: '',
+                                                total_amount: 0,
+                                                tranche_paid: 0,
+                                                doctor_id: '',
+                                                notes: '',
+                                                state: 'N'
+                                            });
+                                            setIsAddVisitOpen(true);
+                                        }}
+                                    >
+                                        <Plus className="h-5 w-5" /> Nouveau Patient
+                                    </Button>
+                                )}
                             </div>
 
                             <div className="grid gap-2">
@@ -494,6 +598,7 @@ const Rendezvous = () => {
                                                                     <TableHead className="text-xs h-9">Note</TableHead>
                                                                     <TableHead className="text-xs h-9 text-right">Total</TableHead>
                                                                     <TableHead className="text-xs h-9 text-right">Payé</TableHead>
+                                                                    {userRole === 'manager' && <TableHead className="text-xs h-9 text-right uppercase font-black">Admin</TableHead>}
                                                                 </TableRow>
                                                             </TableHeader>
                                                             <TableBody>
@@ -506,6 +611,19 @@ const Rendezvous = () => {
                                                                         <TableCell className="text-xs py-2 text-slate-500 max-w-[150px] truncate" title={h.notes}>{h.notes || '-'}</TableCell>
                                                                         <TableCell className="text-xs py-2 text-right font-medium">{h.total_amount?.toLocaleString()}</TableCell>
                                                                         <TableCell className="text-xs py-2 text-right text-emerald-600 font-bold">{h.tranche_paid?.toLocaleString()}</TableCell>
+                                                                        {userRole === 'manager' && (
+                                                                            <TableCell className="text-xs py-2 text-right">
+                                                                                <div className="flex justify-end gap-1">
+                                                                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-500 hover:bg-blue-50" onClick={() => setEditingVisit(h)}>
+                                                                                        <Plus className="h-3.5 w-3.5 rotate-45" /> {/* Use Plus rotated for edit or History icon */}
+                                                                                        <Users className="h-3.5 w-3.5" />
+                                                                                    </Button>
+                                                                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-rose-500 hover:bg-rose-50" onClick={() => handleDeleteVisit(h.id)}>
+                                                                                        <XCircle className="h-3.5 w-3.5" />
+                                                                                    </Button>
+                                                                                </div>
+                                                                            </TableCell>
+                                                                        )}
                                                                     </TableRow>
                                                                 ))}
                                                             </TableBody>
@@ -549,6 +667,94 @@ const Rendezvous = () => {
                                             </div>
                                         </>
                                     )}
+                                </DialogContent>
+                            </Dialog>
+
+                            <Dialog open={isAddVisitOpen || !!editingVisit} onOpenChange={(open) => { if (!open) { setIsAddVisitOpen(false); setEditingVisit(null); } }}>
+                                <DialogContent className="max-w-md rounded-2xl">
+                                    <DialogHeader>
+                                        <DialogTitle className="text-xl font-bold italic text-primary">
+                                            {editingVisit ? 'Modifier la Visite' : 'Ajouter un Patient / Visite'}
+                                        </DialogTitle>
+                                        <DialogDescription>Remplissez les détails médicaux et financiers du patient.</DialogDescription>
+                                    </DialogHeader>
+
+                                    <div className="space-y-4 py-4">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] uppercase font-black text-muted-foreground">Nom du Patient</label>
+                                            <Input
+                                                placeholder="Nom complet"
+                                                value={(editingVisit || newVisitData).client_name}
+                                                onChange={e => editingVisit ? setEditingVisit({ ...editingVisit, client_name: e.target.value }) : setNewVisitData({ ...newVisitData, client_name: e.target.value })}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] uppercase font-black text-muted-foreground">Téléphone</label>
+                                            <Input
+                                                placeholder="05XX XX XX XX"
+                                                value={(editingVisit || newVisitData).phone}
+                                                onChange={e => editingVisit ? setEditingVisit({ ...editingVisit, phone: e.target.value }) : setNewVisitData({ ...newVisitData, phone: e.target.value })}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] uppercase font-black text-muted-foreground">Traitement</label>
+                                            <Input
+                                                placeholder="Soin pratiqué"
+                                                value={(editingVisit || newVisitData).treatment}
+                                                onChange={e => editingVisit ? setEditingVisit({ ...editingVisit, treatment: e.target.value }) : setNewVisitData({ ...newVisitData, treatment: e.target.value })}
+                                            />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] uppercase font-black text-muted-foreground">Prix Total (DZD)</label>
+                                                <Input
+                                                    type="number"
+                                                    value={(editingVisit || newVisitData).total_amount}
+                                                    onChange={e => editingVisit ? setEditingVisit({ ...editingVisit, total_amount: Number(e.target.value) }) : setNewVisitData({ ...newVisitData, total_amount: Number(e.target.value) })}
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] uppercase font-black text-muted-foreground">Versé (DZD)</label>
+                                                <Input
+                                                    type="number"
+                                                    value={(editingVisit || newVisitData).tranche_paid}
+                                                    onChange={e => editingVisit ? setEditingVisit({ ...editingVisit, tranche_paid: Number(e.target.value) }) : setNewVisitData({ ...newVisitData, tranche_paid: Number(e.target.value) })}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] uppercase font-black text-muted-foreground">Equipe / Médecin</label>
+                                            <Select
+                                                value={(editingVisit || newVisitData).doctor_id}
+                                                onValueChange={val => editingVisit ? setEditingVisit({ ...editingVisit, doctor_id: val }) : setNewVisitData({ ...newVisitData, doctor_id: val })}
+                                            >
+                                                <SelectTrigger className="rounded-xl">
+                                                    <SelectValue placeholder="Choisir un médecin" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {doctors.map(d => (
+                                                        <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] uppercase font-black text-muted-foreground">Notes</label>
+                                            <Input
+                                                placeholder="Notes facultatives..."
+                                                value={(editingVisit || newVisitData).notes || ''}
+                                                onChange={e => editingVisit ? setEditingVisit({ ...editingVisit, notes: e.target.value }) : setNewVisitData({ ...newVisitData, notes: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+                                    <DialogFooter>
+                                        <Button
+                                            className="w-full h-12 rounded-xl"
+                                            onClick={() => handleSaveVisit(editingVisit || newVisitData)}
+                                        >
+                                            Enregistrer
+                                        </Button>
+                                    </DialogFooter>
                                 </DialogContent>
                             </Dialog>
                         </div>
@@ -830,7 +1036,7 @@ const Rendezvous = () => {
             <footer className="p-4 border-t bg-muted/20 text-center">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest">&copy; PasseVite - Gestion Holistique des Soins</p>
             </footer>
-        </div >
+        </div>
     );
 };
 
