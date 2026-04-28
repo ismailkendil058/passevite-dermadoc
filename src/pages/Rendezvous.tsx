@@ -612,12 +612,19 @@ const Rendezvous = () => {
                                                         <h3 className="text-lg font-bold">{viewingClient.client_name}</h3>
                                                         <p className="text-sm font-medium text-primary">{viewingClient.phone}</p>
                                                     </div>
-                                                    <Button variant="default" className="gap-2" onClick={() => {
-                                                        setSelectedClient({ phone: viewingClient.phone, name: viewingClient.client_name });
-                                                        setIsScheduleOpen(true);
-                                                    }}>
-                                                        <Plus className="h-4 w-4" /> Nouveau RDV
-                                                    </Button>
+                                                    <div className="flex flex-col sm:flex-row gap-2">
+                                                        <Button variant="default" size="sm" className="gap-2" onClick={() => {
+                                                            setSelectedClient({ phone: viewingClient.phone, name: viewingClient.client_name });
+                                                            setIsScheduleOpen(true);
+                                                        }}>
+                                                            <Plus className="h-4 w-4" /> Nouveau RDV
+                                                        </Button>
+                                                        {['manager', 'admin'].includes(userRole || '') && (
+                                                            <Button variant="outline" size="sm" className="gap-2" onClick={() => setEditingVisit(viewingClient)}>
+                                                                <Users className="h-4 w-4" /> Modifier Patient
+                                                            </Button>
+                                                        )}
+                                                    </div>
                                                 </div>
 
                                                 <div className="space-y-4">
