@@ -28,7 +28,7 @@ const LoginManager = () => {
       return;
     }
 
-    if (data?.user?.role === 'manager') {
+    if (data?.user?.role === 'manager' || data?.user?.role === 'admin') {
       navigate('/manager');
     } else {
       toast.error('Accès refusé. Ce portail est réservé au manager.');

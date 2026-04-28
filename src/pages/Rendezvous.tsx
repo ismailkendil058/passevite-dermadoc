@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
     LogOut, Search, MessageSquare, Calendar as CalendarIcon,
-    Users, CheckCircle2, XCircle, Clock, History, Plus, Phone
+    Users, CheckCircle2, XCircle, Clock, History, Plus, Phone, Trash2
 } from 'lucide-react';
 import { format, addHours, isWithinInterval, startOfDay, endOfDay, parseISO, startOfToday, endOfToday } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -49,6 +49,20 @@ interface Doctor {
     name: string;
     initial: string;
 }
+
+const TREATMENTS = [
+    'Peeling carbonique',
+    'Hydrafacial',
+    'Nettoyage de peau',
+    'Rehaussement de cils',
+    'Browlift',
+    'Extension de cils',
+    'Epilation sourcils',
+    'Teinture sourcils',
+    'Epilation a la cire',
+    'Epilation au laser',
+    'Consultation'
+];
 
 const Rendezvous = () => {
     const [clients, setClients] = useState<CompletedClient[]>([]);
@@ -161,6 +175,10 @@ const Rendezvous = () => {
     };
 
     const handleDeleteVisit = async (visitId: string) => {
+        if (!['manager', 'admin'].includes(userRole || '')) {
+            toast.error('Seul un administrateur peut supprimer une visite');
+            return;
+        }
         if (!window.confirm('Voulez-vous vraiment supprimer cette visite ?')) return;
 
         try {
@@ -179,6 +197,26 @@ const Rendezvous = () => {
         } catch (error) {
             console.error('Error deleting visit:', error);
             toast.error('Erreur lors de la suppression');
+        }
+    };
+
+    const handleDeleteAppointment = async (id: string) => {
+        if (!['manager', 'admin'].includes(userRole || '')) {
+            toast.error('Seul un administrateur peut supprimer un rendez-vous');
+            return;
+        }
+        if (!window.confirm('Voulez-vous vraiment supprimer ce rendez-vous ?')) return;
+
+        const { error } = await supabase
+            .from('appointments')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            toast.error('Erreur lors de la suppression');
+        } else {
+            setAppointments(prev => prev.filter(a => a.id !== id));
+            toast.success('Rendez-vous supprimé');
         }
     };
 
@@ -398,9 +436,6 @@ const Rendezvous = () => {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => window.location.href = '/manager'} className="h-9 w-9">
-                        <History className="h-5 w-5" />
-                    </Button>
                     <Button variant="ghost" size="icon" onClick={() => window.location.href = '/accueil'} className="h-9 w-9">
                         <LogOut className="h-5 w-5" />
                     </Button>
@@ -515,7 +550,7 @@ const Rendezvous = () => {
                                         className="pl-10 h-12 rounded-xl"
                                     />
                                 </div>
-                                {userRole === 'manager' && (
+                                {['manager', 'admin'].includes(userRole || '') && (
                                     <Button
                                         className="w-full sm:w-auto h-12 rounded-xl px-6 gap-2 shadow-lg shadow-primary/20"
                                         onClick={() => {
@@ -598,7 +633,8 @@ const Rendezvous = () => {
                                                                     <TableHead className="text-xs h-9">Note</TableHead>
                                                                     <TableHead className="text-xs h-9 text-right">Total</TableHead>
                                                                     <TableHead className="text-xs h-9 text-right">Payé</TableHead>
-                                                                    {userRole === 'manager' && <TableHead className="text-xs h-9 text-right uppercase font-black">Admin</TableHead>}
+                                                                    <TableHead className="text-xs h-9 text-right uppercase font-black">Admin</TableHead>
+                                                                    {['manager', 'admin'].includes(userRole || '') && <TableHead className="text-xs h-9 text-right uppercase font-black">Actions</TableHead>}
                                                                 </TableRow>
                                                             </TableHeader>
                                                             <TableBody>
@@ -611,7 +647,7 @@ const Rendezvous = () => {
                                                                         <TableCell className="text-xs py-2 text-slate-500 max-w-[150px] truncate" title={h.notes}>{h.notes || '-'}</TableCell>
                                                                         <TableCell className="text-xs py-2 text-right font-medium">{h.total_amount?.toLocaleString()}</TableCell>
                                                                         <TableCell className="text-xs py-2 text-right text-emerald-600 font-bold">{h.tranche_paid?.toLocaleString()}</TableCell>
-                                                                        {userRole === 'manager' && (
+                                                                        {['manager', 'admin'].includes(userRole || '') && (
                                                                             <TableCell className="text-xs py-2 text-right">
                                                                                 <div className="flex justify-end gap-1">
                                                                                     <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-500 hover:bg-blue-50" onClick={() => setEditingVisit(h)}>
@@ -696,13 +732,34 @@ const Rendezvous = () => {
                                                 onChange={e => editingVisit ? setEditingVisit({ ...editingVisit, phone: e.target.value }) : setNewVisitData({ ...newVisitData, phone: e.target.value })}
                                             />
                                         </div>
-                                        <div className="space-y-2">
+                                        <div className="space-y-2 relative">
                                             <label className="text-[10px] uppercase font-black text-muted-foreground">Traitement</label>
                                             <Input
                                                 placeholder="Soin pratiqué"
                                                 value={(editingVisit || newVisitData).treatment}
                                                 onChange={e => editingVisit ? setEditingVisit({ ...editingVisit, treatment: e.target.value }) : setNewVisitData({ ...newVisitData, treatment: e.target.value })}
                                             />
+                                            {((editingVisit || newVisitData).treatment && (editingVisit || newVisitData).treatment.length > 0) && (
+                                                <div className="flex flex-wrap gap-1.5 mt-2">
+                                                    {TREATMENTS.filter(t =>
+                                                        t.toLowerCase().includes(((editingVisit || newVisitData).treatment || '').toLowerCase()) &&
+                                                        t.toLowerCase() !== ((editingVisit || newVisitData).treatment || '').toLowerCase()
+                                                    ).slice(0, 5).map(suggestion => (
+                                                        <Button
+                                                            key={suggestion}
+                                                            variant="secondary"
+                                                            size="sm"
+                                                            className="h-7 text-[10px] px-2 bg-primary/5 hover:bg-primary/10 text-primary border-primary/10 font-bold uppercase tracking-tighter"
+                                                            onClick={() => editingVisit
+                                                                ? setEditingVisit({ ...editingVisit, treatment: suggestion })
+                                                                : setNewVisitData({ ...newVisitData, treatment: suggestion })
+                                                            }
+                                                        >
+                                                            {suggestion}
+                                                        </Button>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="space-y-2">
@@ -1029,6 +1086,11 @@ const Rendezvous = () => {
                         <Button onClick={handleScheduleAppt} className="rounded-xl h-11 flex-1 bg-primary">
                             {editingApptId ? 'Enregistrer' : 'Confirmer'}
                         </Button>
+                        {editingApptId && ['manager', 'admin'].includes(userRole || '') && (
+                            <Button variant="destructive" onClick={() => handleDeleteAppointment(editingApptId)} className="rounded-xl h-11 px-3">
+                                <Trash2 className="h-4 w-4" />
+                            </Button>
+                        )}
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

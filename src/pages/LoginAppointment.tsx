@@ -1,4 +1,3 @@
-import React, { useState } from 'export'; // Wait, import 'export'? No, typo.
 import React, { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
@@ -29,7 +28,7 @@ const LoginAppointment = () => {
             return;
         }
 
-        if (data?.user?.role === 'manager') {
+        if (data?.user?.role === 'manager' || data?.user?.role === 'admin') {
             navigate('/appointment');
         } else {
             toast.error('Accès refusé. Ce portail est réservé aux managers.');

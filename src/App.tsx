@@ -87,31 +87,31 @@ const App = () => (
             <Route path="/feedback" element={<Feedback />} />
             <Route path="/merci" element={<Merci />} />
             <Route path="/accueil" element={
-              <ProtectedRoute requiredRoles={['receptionist']}><Accueil /></ProtectedRoute>
+              <ProtectedRoute requiredRoles={['receptionist', 'manager', 'admin']}><Accueil /></ProtectedRoute>
             } />
             <Route path="/manager" element={
-              <ProtectedRoute requiredRoles={['manager']}><Manager /></ProtectedRoute>
+              <ProtectedRoute requiredRoles={['manager', 'admin']}><Manager /></ProtectedRoute>
             } />
             <Route path="/manager/depenses" element={
-              <ProtectedRoute requiredRoles={['manager']}><Depenses /></ProtectedRoute>
+              <ProtectedRoute requiredRoles={['manager', 'admin']}><Depenses /></ProtectedRoute>
             } />
             <Route path="/manager/factures" element={
-              <ProtectedRoute requiredRoles={['manager', 'receptionist']}><Factures /></ProtectedRoute>
+              <ProtectedRoute requiredRoles={['manager', 'receptionist', 'admin']}><Factures /></ProtectedRoute>
             } />
             <Route path="/manager/factures/ajouter" element={
-              <ProtectedRoute requiredRoles={['manager', 'receptionist']}><AjouterFacture /></ProtectedRoute>
+              <ProtectedRoute requiredRoles={['manager', 'receptionist', 'admin']}><AjouterFacture /></ProtectedRoute>
             } />
             <Route path="/accueil/factures/ajouter" element={
-              <ProtectedRoute requiredRoles={['manager', 'receptionist']}><AjouterFacture /></ProtectedRoute>
+              <ProtectedRoute requiredRoles={['manager', 'receptionist', 'admin']}><AjouterFacture /></ProtectedRoute>
             } />
 
 
 
             <Route path="/rendezvous" element={
-              <ProtectedRoute requiredRoles={['manager', 'receptionist']}><Rendezvous /></ProtectedRoute>
+              <ProtectedRoute requiredRoles={['manager', 'receptionist', 'admin']}><Rendezvous /></ProtectedRoute>
             } />
             <Route path="/appointment" element={
-              <ProtectedRoute requiredRoles={['manager']}><Appointment /></ProtectedRoute>
+              <ProtectedRoute requiredRoles={['manager', 'admin']}><Appointment /></ProtectedRoute>
             } />
             <Route path="*" element={<NotFound />} />
           </Routes>
