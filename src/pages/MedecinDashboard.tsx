@@ -38,7 +38,7 @@ const MedecinDashboard = () => {
         if (authData) {
             setDoctorInfo(JSON.parse(authData));
         } else {
-            navigate('/doctor/login');
+            navigate('/equipe/login');
         }
     }, [navigate]);
 
@@ -184,13 +184,13 @@ const MedecinDashboard = () => {
                         <Users className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                        <h1 className="text-xl font-bold text-foreground italic">PasseVite Médecin</h1>
+                        <h1 className="text-xl font-bold text-foreground italic">PasseVite Equipe</h1>
                         <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Tableau de bord de soins</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-4">
                     <div className="hidden lg:flex flex-col text-right">
-                        <span className="text-sm font-bold text-slate-700">Dr. {doctorInfo ? doctorInfo.name : 'Chargement...'}</span>
+                        <span className="text-sm font-bold text-slate-700">{doctorInfo ? doctorInfo.name : 'Chargement...'}</span>
                         <p className="text-[10px] text-muted-foreground uppercase font-medium">Session Active</p>
                     </div>
                     <Button variant="ghost" size="icon" onClick={handleSignOut} className="h-9 w-9 text-rose-500 hover:bg-rose-50 rounded-full">
@@ -288,7 +288,7 @@ const MedecinDashboard = () => {
                                 <CardContent className="p-0">
                                     <div className="p-6 border-b bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-4">
                                         <div>
-                                            <h3 className="font-black italic text-xl text-primary">Mon Emploi du Temps</h3>
+                                            <h3 className="font-black italic text-xl text-primary">Emploi du Temps</h3>
                                             <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{format(calendarDate || new Date(), 'EEEE dd MMMM yyyy', { locale: fr })}</p>
                                         </div>
                                         <div className="flex gap-2">
@@ -309,7 +309,7 @@ const MedecinDashboard = () => {
                                                 {/* Single Column for current Doctor */}
                                                 <div className="relative bg-slate-50/30 rounded-3xl min-h-[1000px] border border-dashed border-slate-200">
                                                     <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-md p-4 border-b text-center font-black text-xs text-primary uppercase tracking-[0.2em] rounded-t-3xl">
-                                                        Planning Dr. {doctorInfo?.name}
+                                                        Planning {doctorInfo?.name}
                                                     </div>
 
                                                     {/* Appointments for this doctor on selected current day */}
@@ -544,7 +544,7 @@ const MedecinDashboard = () => {
                                                             {format(new Date(a.appointment_at), 'dd/MM')}
                                                         </div>
                                                         <div>
-                                                            <p className="text-sm font-bold text-slate-700">Séance avec Dr. {a.doctor?.name || 'Généraliste'}</p>
+                                                            <p className="text-sm font-bold text-slate-700">Séance avec {a.doctor?.name || 'Généraliste'}</p>
                                                             <p className="text-[10px] text-slate-400 font-bold uppercase">{format(new Date(a.appointment_at), 'HH:mm')}</p>
                                                         </div>
                                                     </div>

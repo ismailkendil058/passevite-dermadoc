@@ -1,10 +1,11 @@
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
-import { Monitor, UserCog } from 'lucide-react';
+import { Monitor, UserCog, Sparkles } from 'lucide-react';
 
 const Index = () => {
   const sections = [
     { title: 'Accueil', description: 'Gestion de la reception et de la file', icon: Monitor, href: '/accueil/login', variant: 'outline' as const },
+    { title: 'Rendez-vous', description: 'Réservations du site web', icon: Sparkles, href: '/appointment/login', variant: 'outline' as const },
     { title: 'Manager', description: 'Tableau de bord analytique', icon: UserCog, href: '/manager/login', variant: 'outline' as const },
   ];
 
@@ -30,7 +31,7 @@ const Index = () => {
         <div className="h-1 w-12 bg-primary/20 mx-auto mt-6 rounded-full" />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-lg relative z-10">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full max-w-4xl relative z-10">
         {sections.map(({ title, description, icon: Icon, href }, index) => (
           <Link
             key={href}

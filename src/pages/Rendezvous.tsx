@@ -100,6 +100,22 @@ const Rendezvous = () => {
 
     useEffect(() => {
         fetchInitialData();
+
+        // Real-time subscription for appointments
+        const channel = supabase
+            .channel('appointments-changes')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'appointments' },
+                () => {
+                    fetchInitialData();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, []);
 
     // Fetch clients with server-side debounce for scalability
@@ -163,7 +179,7 @@ const Rendezvous = () => {
         return parsedAppointments.filter(a => {
             const apptDate = parseISO(a.appointment_at);
             const isWithin24h = isWithinInterval(apptDate, { start: now, end: next24h });
-            return isWithin24h && a.status !== 'attended' && a.status !== 'denied';
+            return isWithin24h && (a.status === 'scheduled' || a.status === 'confirmed');
         });
     }, [parsedAppointments]);
 
@@ -182,7 +198,7 @@ const Rendezvous = () => {
     };
 
     const handleSendSMS = (phone: string, name: string, time: string) => {
-        const message = `We are PasseVite clinic. Your rendezvous with your doctor is in 24H. Please confirm if you will attend.`;
+        const message = `We are PasseVite clinic. Your rendezvous with our equipe is in 24H. Please confirm if you will attend.`;
         window.open(`sms:${phone}?body=${encodeURIComponent(message)}`, '_blank');
     };
 
@@ -350,7 +366,7 @@ const Rendezvous = () => {
                                                     <p className="font-bold text-lg text-foreground">{appt.client_name}</p>
                                                     <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
                                                         <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                                                        Dr. {appt.doctor?.name || 'Inconnu'}
+                                                        {appt.doctor?.name || 'Inconnu'}
                                                     </p>
                                                     <div className="mt-2 flex gap-1.5">
                                                         <Badge variant="outline" className={`capitalize text-[10px] px-2 py-0 ${getStatusStyle(appt.status)}`}>
@@ -577,7 +593,7 @@ const Rendezvous = () => {
                                 <CardContent className="p-0">
                                     <div className="p-6 border-b bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-4">
                                         <div>
-                                            <h3 className="font-black italic text-xl text-primary">Vue Docteurs</h3>
+                                            <h3 className="font-black italic text-xl text-primary">Vue Equipe</h3>
                                             <p className="text-xs text-muted-foreground">Gestion d'agenda globale</p>
                                         </div>
                                         <div className="flex gap-2">
@@ -604,7 +620,7 @@ const Rendezvous = () => {
                                                         : 'bg-muted text-muted-foreground hover:bg-muted/80'}
                                                 `}
                                             >
-                                                Dr. {d.name}
+                                                {d.name}
                                             </button>
                                         ))}
                                     </div>
@@ -653,7 +669,7 @@ const Rendezvous = () => {
                                                                     <p className="text-[10px] text-primary font-black uppercase tracking-[0.2em] mb-0.5 opacity-60">Cabinet</p>
                                                                     <p className="font-black text-sm text-foreground italic flex items-center justify-center gap-2">
                                                                         <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                                                                        Dr. {doctor.name}
+                                                                        {doctor.name}
                                                                     </p>
                                                                 </div>
 
@@ -732,7 +748,7 @@ const Rendezvous = () => {
                     <div className="space-y-4 py-4">
                         {!selectedClient && (
                             <div className="space-y-2">
-                                <label className="text-xs font-black uppercase text-muted-foreground">Rechercher un Patient</label>
+                                <label className="text-xs font-black uppercase text-muted-foreground">Rechercher</label>
                                 <div className="relative">
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                     <Input
@@ -785,12 +801,12 @@ const Rendezvous = () => {
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-xs font-black uppercase text-muted-foreground">Médecin</label>
+                            <label className="text-xs font-black uppercase text-muted-foreground">Equipe</label>
                             <Select value={newApptDoctor} onValueChange={setNewApptDoctor}>
-                                <SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Choisir un médecin" /></SelectTrigger>
+                                <SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Choisir l'équipe" /></SelectTrigger>
                                 <SelectContent>
                                     {doctors.map(d => (
-                                        <SelectItem key={d.id} value={d.id}>Dr. {d.name}</SelectItem>
+                                        <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>

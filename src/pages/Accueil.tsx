@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Phone, Plus, LogOut, ChevronRight, ChevronLeft, Users, Clock, CheckCircle, XCircle, MessageCircle, Pencil, Trash2, UserCheck, Calendar as CalendarIcon, DollarSign, ShoppingCart } from 'lucide-react';
+import { Phone, Plus, LogOut, ChevronRight, ChevronLeft, Users, Clock, CheckCircle, XCircle, MessageCircle, Pencil, Trash2, UserCheck, Calendar as CalendarIcon, DollarSign, ShoppingCart, Sparkles } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -19,7 +19,19 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 
-const TREATMENTS = ['Consultation', 'Blanchiment', 'Extraction', 'Détartrage', 'Soin dentaire', 'Prothèse', 'Orthodontie'];
+const TREATMENTS = [
+  'Peeling carbonique',
+  'Hydrafacial',
+  'Nettoyage de peau',
+  'Rehaussement de cils',
+  'Browlift',
+  'Extension de cils',
+  'Epilation sourcils',
+  'Teinture sourcils',
+  'Epilation a la cire',
+  'Epilation au laser',
+  'Consultation'
+];
 
 const QueueItem = React.memo(({ entry, index, onEdit, onDelete, onNext }: { entry: QueueEntry; index: number; onEdit: (e: QueueEntry) => void; onDelete: (id: string) => void; onNext: (e: QueueEntry) => void }) => {
   const stateColors = {
@@ -49,7 +61,7 @@ const QueueItem = React.memo(({ entry, index, onEdit, onDelete, onNext }: { entr
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground truncate">
-              Dr. {entry.doctor?.name || '—'}
+              equipe {entry.doctor?.name || '—'}
             </p>
           </div>
         </div>
@@ -118,7 +130,6 @@ const Accueil = () => {
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
-  const [showCompleted, setShowCompleted] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<QueueEntry | null>(null);
   const [editEntry, setEditEntry] = useState<QueueEntry | null>(null);
@@ -161,9 +172,6 @@ const Accueil = () => {
   const [totalPaidPreviously, setTotalPaidPreviously] = useState(0);
   const [completeNotes, setCompleteNotes] = useState('');
 
-  const [completedClients, setCompletedClients] = useState<any[]>([]);
-
-  // Next appointment form
   const [hasNextAppt, setHasNextAppt] = useState(false);
   const [nextApptDate, setNextApptDate] = useState<Date | undefined>(undefined);
   const [nextApptTime, setNextApptTime] = useState('09:00');
@@ -232,35 +240,35 @@ const Accueil = () => {
     }
   };
 
-  // Search for appointment when phone or state changes with debounce
+  // Search for appointment when phone, name or state changes with debounce
   React.useEffect(() => {
     const timeoutId = setTimeout(() => {
       const searchAppointments = async () => {
-        if (newState === 'R' && newPhone.length >= 8) {
+        // Only search if we are in Rendez-vous state and have enough characters
+        const hasEnoughChars = (newPhone.trim().length >= 3 || newPatientName.trim().length >= 2);
+
+        if (newState === 'R' && hasEnoughChars && !linkedAppointmentId) {
           const today = new Date();
           const start = new Date(today.setHours(0, 0, 0, 0)).toISOString();
-          const end = new Date(today.setHours(23, 59, 59, 999)).toISOString();
 
-          const { data } = await (await import('@/integrations/supabase/client')).supabase
+          let orConditions = [];
+          if (newPhone.trim().length >= 3) orConditions.push(`client_phone.ilike.%${newPhone.trim()}%`);
+          if (newPatientName.trim().length >= 2) orConditions.push(`client_name.ilike.%${newPatientName.trim()}%`);
+
+          const { data } = await supabase
             .from('appointments')
-            .select('id, client_name, doctor_id')
-            .eq('client_phone', newPhone.trim())
+            .select('id, client_name, client_phone, doctor_id, appointment_at, status')
+            .neq('status', 'attended')
+            .neq('status', 'denied')
+            .or(orConditions.join(','))
             .gte('appointment_at', start)
-            .lte('appointment_at', end);
+            .order('appointment_at', { ascending: true })
+            .limit(5);
 
           if (data && data.length > 0) {
             setFoundAppointments(data);
-            if (data.length === 1) {
-              setNewPatientName(data[0].client_name);
-              setNewDoctorId(data[0].doctor_id);
-              setLinkedAppointmentId(data[0].id);
-              toast.info(`Rendez-vous trouvé pour ${data[0].client_name}`);
-            } else {
-              toast.info(`${data.length} rendez-vous trouvés pour ce numéro. Veuillez choisir.`);
-            }
           } else {
             setFoundAppointments([]);
-            setLinkedAppointmentId(null);
           }
         } else {
           setFoundAppointments([]);
@@ -269,10 +277,10 @@ const Accueil = () => {
       };
 
       searchAppointments();
-    }, 500); // 500ms debounce
+    }, 400); // 400ms debounce
 
     return () => clearTimeout(timeoutId);
-  }, [newPhone, newState]);
+  }, [newPhone, newPatientName, newState, linkedAppointmentId]);
 
   const handleNext = async (entry: QueueEntry) => {
     // Call client - move from waiting to in_cabinet
@@ -444,17 +452,6 @@ const Accueil = () => {
     }
   };
 
-  const fetchCompleted = async () => {
-    if (!activeSession) return;
-    const { data } = await (await import('@/integrations/supabase/client')).supabase
-      .from('completed_clients')
-      .select('*, doctor:doctors(*)')
-      .eq('session_id', activeSession.id)
-      .order('completed_at', { ascending: false });
-    setCompletedClients(data || []);
-    setShowCompleted(true);
-  };
-
   const filtered = useMemo(() => {
     return entries.filter(e => {
       const matchesDoctor = doctorFilter === 'all' || e.doctor_id === doctorFilter;
@@ -541,12 +538,6 @@ const Accueil = () => {
             </Button>
           </Link>
 
-          <Button variant="outline" size="sm" onClick={fetchCompleted} className="hidden sm:flex h-8 px-3 text-[11px] font-black uppercase tracking-widest">
-            <CheckCircle className="h-3.5 w-3.5 mr-1.5" /> Terminés
-          </Button>
-          <Button variant="outline" size="icon" onClick={fetchCompleted} className="sm:hidden h-8 w-8 rounded-full">
-            <CheckCircle className="h-4 w-4" />
-          </Button>
 
           <AlertDialog>
             <AlertDialogTrigger asChild>
@@ -620,7 +611,7 @@ const Accueil = () => {
                 onClick={() => setDoctorFilter(doctorFilter === ds.id ? 'all' : ds.id)}
               >
                 <CardContent className="p-3 sm:p-4 text-center">
-                  <p className="text-xs font-medium text-muted-foreground mb-1 truncate">Dr. {ds.name}</p>
+                  <p className="text-xs font-medium text-muted-foreground mb-1 truncate">{ds.name}</p>
                   <p className="text-xl sm:text-2xl font-bold text-foreground">{ds.waitingCount}</p>
                   <p className="text-xs text-muted-foreground">en attente</p>
                 </CardContent>
@@ -647,7 +638,7 @@ const Accueil = () => {
                 <CardContent className="p-3 text-center">
                   <p className="font-bold text-lg text-orange-700">{entry.client_id}</p>
                   <p className="text-xs font-medium text-orange-800 truncate">{entry.patient_name || '—'}</p>
-                  <p className="text-xs text-orange-600 truncate">Dr. {entry.doctor?.name || '—'}</p>
+                  <p className="text-xs text-orange-600 truncate">{entry.doctor?.name || '—'}</p>
                   <p className="text-xs text-orange-500 mt-1">Cliquer pour finaliser</p>
                 </CardContent>
               </Card>
@@ -696,6 +687,13 @@ const Accueil = () => {
             <DialogTitle>Ajouter un patient</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 sm:space-y-4">
+            <Select value={newState} onValueChange={(v) => setNewState(v as 'N' | 'R')}>
+              <SelectTrigger className="h-11 sm:h-12"><SelectValue placeholder="État" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="N">🟢 Nouveau</SelectItem>
+                <SelectItem value="R">🔵 Rendez-vous</SelectItem>
+              </SelectContent>
+            </Select>
             <Input
               placeholder="Nom du patient"
               value={newPatientName}
@@ -709,54 +707,73 @@ const Accueil = () => {
               <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-200 py-1.5 flex items-center gap-1.5">
                 <CalendarIcon className="h-3 w-3" /> Rendez-vous lié
               </Badge>
-
             )}
             <Input
               placeholder="Numéro de téléphone"
               value={newPhone}
-              onChange={(e) => setNewPhone(e.target.value)}
+              onChange={(e) => {
+                setNewPhone(e.target.value);
+                setLinkedAppointmentId(null);
+              }}
               type="tel"
               className="h-11 sm:h-12"
             />
-            <Select value={newState} onValueChange={(v) => setNewState(v as 'U' | 'N' | 'R')}>
-              <SelectTrigger className="h-11 sm:h-12"><SelectValue placeholder="État" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="U">🔴 Urgence</SelectItem>
-                <SelectItem value="N">🟢 Nouveau</SelectItem>
-                <SelectItem value="R">🔵 Rendez-vous</SelectItem>
-              </SelectContent>
-            </Select>
 
-            {foundAppointments.length > 1 && (
-              <div className="space-y-2 p-3 bg-blue-50 border border-blue-100 rounded-lg animate-in fade-in slide-in-from-top-2">
-                <p className="text-[10px] font-bold uppercase text-blue-600">Plusieurs rendez-vous trouvés :</p>
+            {foundAppointments.length > 0 && !linkedAppointmentId && (
+              <div className="space-y-2 p-3 bg-blue-50/50 border border-blue-100 rounded-xl animate-in fade-in slide-in-from-top-2">
+                <p className="text-[10px] font-black uppercase text-blue-600 tracking-widest flex items-center gap-1.5 px-1">
+                  <Sparkles className="h-3 w-3" /> Suggestions (Avenir) :
+                </p>
                 <div className="flex flex-col gap-1.5">
-                  {foundAppointments.map((appt) => (
-                    <Button
-                      key={appt.id}
-                      variant={linkedAppointmentId === appt.id ? "default" : "outline"}
-                      size="sm"
-                      className="justify-start h-auto py-2 text-left"
-                      onClick={() => {
-                        setNewPatientName(appt.client_name);
-                        setNewDoctorId(appt.doctor_id);
-                        setLinkedAppointmentId(appt.id);
-                      }}
-                    >
-                      <div className="min-w-0">
-                        <p className="font-bold truncate">{appt.client_name}</p>
-                        <p className="text-[10px] opacity-70">Dr. {doctors.find(d => d.id === appt.doctor_id)?.name || '...'}</p>
-                      </div>
-                    </Button>
-                  ))}
+                  {foundAppointments.map((appt) => {
+                    const apptDate = new Date(appt.appointment_at);
+                    const isToday = apptDate.toDateString() === new Date().toDateString();
+
+                    return (
+                      <Button
+                        key={appt.id}
+                        variant="outline"
+                        size="sm"
+                        className="justify-start h-auto py-2.5 px-3 text-left border-blue-100 bg-white hover:bg-blue-50 hover:border-blue-200 transition-all rounded-lg group"
+                        onClick={() => {
+                          setNewPatientName(appt.client_name);
+                          setNewPhone(appt.client_phone);
+                          setNewDoctorId(appt.doctor_id);
+                          setLinkedAppointmentId(appt.id);
+                          setFoundAppointments([]);
+                          toast.success(`Patient lié : ${appt.client_name}`);
+                        }}
+                      >
+                        <div className="flex items-center gap-3 w-full">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${isToday ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}>
+                            <CalendarIcon className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="font-bold text-slate-900 truncate">{appt.client_name}</p>
+                              <Badge variant="outline" className={`text-[9px] px-1.5 py-0 border-0 ${isToday ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
+                                {isToday ? "Aujourd'hui" : format(apptDate, 'dd/MM')}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
+                              <span>{appt.client_phone}</span>
+                              <span>•</span>
+                              <span className="truncate">{doctors.find(d => d.id === appt.doctor_id)?.name || '...'}</span>
+                            </div>
+                          </div>
+                          <ChevronRight className="h-4 w-4 text-blue-300 group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all" />
+                        </div>
+                      </Button>
+                    );
+                  })}
                 </div>
               </div>
             )}
             <Select value={newDoctorId} onValueChange={setNewDoctorId}>
-              <SelectTrigger className="h-11 sm:h-12"><SelectValue placeholder="Médecin" /></SelectTrigger>
+              <SelectTrigger className="h-11 sm:h-12"><SelectValue placeholder="Equipe" /></SelectTrigger>
               <SelectContent>
                 {doctors.map(d => (
-                  <SelectItem key={d.id} value={d.id}>Dr. {d.name}</SelectItem>
+                  <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -854,12 +871,12 @@ const Accueil = () => {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase text-muted-foreground">Médecin</label>
+                  <label className="text-[10px] font-bold uppercase text-muted-foreground">Equipe</label>
                   <Select value={nextApptDoctorId} onValueChange={setNextApptDoctorId}>
-                    <SelectTrigger className="h-10"><SelectValue placeholder="Médecin" /></SelectTrigger>
+                    <SelectTrigger className="h-10"><SelectValue placeholder="Equipe" /></SelectTrigger>
                     <SelectContent>
                       {doctors.map(d => (
-                        <SelectItem key={d.id} value={d.id}>Dr. {d.name}</SelectItem>
+                        <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -874,37 +891,6 @@ const Accueil = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Completed Clients Dialog */}
-      <Dialog open={showCompleted} onOpenChange={setShowCompleted}>
-        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg max-h-[80dvh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Patients terminés</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-2">
-            {completedClients.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">Aucun patient terminé</p>
-            ) : (
-              completedClients.map((c: any) => (
-                <Card key={c.id} className="border-0 shadow-sm">
-                  <CardContent className="p-3">
-                    <div className="flex justify-between items-start gap-2">
-                      <div className="min-w-0">
-                        <p className="font-medium text-foreground truncate">{c.client_name}</p>
-                        <p className="text-xs sm:text-sm text-muted-foreground">{c.client_id} · {c.treatment}</p>
-                        <a href={`tel:${c.phone}`} className="text-xs sm:text-sm text-primary">{c.phone}</a>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="font-semibold text-sm text-foreground">{c.total_amount?.toLocaleString()} DZD</p>
-                        <p className="text-xs text-muted-foreground">Payé: {c.tranche_paid?.toLocaleString()} DZD</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Edit Client Modal */}
       <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
@@ -935,10 +921,10 @@ const Accueil = () => {
               </SelectContent>
             </Select>
             <Select value={editDoctorId} onValueChange={setEditDoctorId}>
-              <SelectTrigger className="h-11 sm:h-12"><SelectValue placeholder="Médecin" /></SelectTrigger>
+              <SelectTrigger className="h-11 sm:h-12"><SelectValue placeholder="Equipe" /></SelectTrigger>
               <SelectContent>
                 {doctors.map(d => (
-                  <SelectItem key={d.id} value={d.id}>Dr. {d.name}</SelectItem>
+                  <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

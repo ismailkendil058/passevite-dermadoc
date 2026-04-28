@@ -128,7 +128,7 @@ const Manager = () => {
   }, [filtered]);
 
   const exportExcel = () => {
-    const headers = ['Nom', 'Téléphone', 'ID', 'Médecin', 'Traitement', 'Montant Total', 'Tranche Payée', 'Réceptionniste', 'Date'];
+    const headers = ['Nom', 'Téléphone', 'ID', 'Equipe', 'Traitement', 'Montant Total', 'Tranche Payée', 'Réceptionniste', 'Date'];
     const rows = filtered.map(c => [
       c.client_name,
       c.phone,
@@ -160,6 +160,12 @@ const Manager = () => {
         </div>
         <div className="flex items-center gap-2">
           <FeedbackStats />
+          <Button asChild variant="ghost" size="sm" className="h-9">
+            <Link to="/appointment">
+              <Calendar className="h-4 w-4 mr-1" />
+              <span className="hidden sm:inline">Rendez-vous</span>
+            </Link>
+          </Button>
           <Button asChild variant="ghost" size="sm" className="h-9">
             <Link to="/manager/depenses">
               <DollarSign className="h-4 w-4 mr-1" />
@@ -199,11 +205,11 @@ const Manager = () => {
           </div>
           <div className="flex gap-2">
             <Select value={doctorFilter} onValueChange={setDoctorFilter}>
-              <SelectTrigger className="flex-1 sm:w-[150px] h-9 sm:h-10 text-sm"><SelectValue placeholder="Médecin" /></SelectTrigger>
+              <SelectTrigger className="flex-1 sm:w-[150px] h-9 sm:h-10 text-sm"><SelectValue placeholder="Equipe" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tous médecins</SelectItem>
+                <SelectItem value="all">Toute l'équipe</SelectItem>
                 {doctors.map(d => (
-                  <SelectItem key={d.id} value={d.name}>Dr. {d.name}</SelectItem>
+                  <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -254,7 +260,7 @@ const Manager = () => {
             <CardContent className="p-3 sm:p-4">
               <div className="flex items-center gap-1.5 sm:gap-2 mb-1 sm:mb-2">
                 <Stethoscope className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
-                <span className="text-xs text-muted-foreground">Médecins</span>
+                <span className="text-xs text-muted-foreground">Equipe</span>
               </div>
               <p className="text-xl sm:text-2xl font-bold text-foreground">{analytics.byDoctor.size}</p>
             </CardContent>
@@ -287,7 +293,7 @@ const Manager = () => {
           {Array.from(analytics.byDoctor.entries()).map(([name, stats]) => (
             <Card key={name} className="border-0 shadow-sm">
               <CardContent className="p-3 sm:p-4">
-                <p className="font-medium text-foreground mb-2 text-sm sm:text-base">Dr. {name}</p>
+                <p className="font-medium text-foreground mb-2 text-sm sm:text-base">{name}</p>
                 <div className="grid grid-cols-3 gap-2 text-sm">
                   <div>
                     <p className="text-muted-foreground text-xs">Patients</p>
@@ -328,7 +334,7 @@ const Manager = () => {
                     </div>
                   </div>
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>Dr. {c.doctor?.name || '—'} · {c.treatment}</span>
+                    <span>{c.doctor?.name || '—'} · {c.treatment}</span>
                     <span>{format(new Date(c.completed_at), 'dd/MM HH:mm')}</span>
                   </div>
                 </CardContent>
@@ -344,7 +350,7 @@ const Manager = () => {
                 <TableRow>
                   <TableHead>Nom</TableHead>
                   <TableHead>Tél.</TableHead>
-                  <TableHead>Médecin</TableHead>
+                  <TableHead>Equipe</TableHead>
                   <TableHead>Traitement</TableHead>
                   <TableHead className="text-right">Montant</TableHead>
                   <TableHead className="text-right">Payé</TableHead>
@@ -368,7 +374,7 @@ const Manager = () => {
                       <TableCell>
                         <a href={`tel:${c.phone}`} className="text-primary">{c.phone}</a>
                       </TableCell>
-                      <TableCell>Dr. {c.doctor?.name || '—'}</TableCell>
+                      <TableCell>{c.doctor?.name || '—'}</TableCell>
                       <TableCell>{c.treatment}</TableCell>
                       <TableCell className="text-right">{c.total_amount?.toLocaleString()} DZD</TableCell>
                       <TableCell className="text-right">{c.tranche_paid?.toLocaleString()} DZD</TableCell>

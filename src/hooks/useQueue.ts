@@ -228,7 +228,7 @@ export function useQueue() {
     if (!activeSession) return { error: new Error('Aucune séance active') };
 
     const doctor = doctors.find(d => d.id === doctorId);
-    if (!doctor) return { error: new Error('Médecin introuvable') };
+    if (!doctor) return { error: new Error('Equipe introuvable') };
 
     // Get next number for this state in current session
     const { data: existing } = await supabase

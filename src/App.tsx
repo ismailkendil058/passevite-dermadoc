@@ -23,6 +23,8 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const Depenses = lazy(() => import("./pages/Depenses"));
 const Factures = lazy(() => import("./pages/Factures"));
 const AjouterFacture = lazy(() => import("./pages/AjouterFacture"));
+const Appointment = lazy(() => import("./pages/Appointment"));
+const LoginAppointment = lazy(() => import("./pages/LoginAppointment"));
 
 
 const LoadingScreen = () => (
@@ -48,6 +50,7 @@ function ProtectedRoute({ children, requiredRoles }: { children: React.ReactNode
   if (loading) return <LoadingScreen />;
 
   if (!user) {
+    if (window.location.pathname.startsWith('/appointment')) return <Navigate to="/appointment/login" replace />;
     if (requiredRoles?.includes('manager')) return <Navigate to="/manager/login" replace />;
     if (requiredRoles?.includes('receptionist')) return <Navigate to="/accueil/login" replace />;
     return <Navigate to="/" replace />;
@@ -77,6 +80,7 @@ const App = () => (
             <Route path="/website" element={<Website />} />
             <Route path="/accueil/login" element={<LoginAccueil />} />
             <Route path="/manager/login" element={<LoginManager />} />
+            <Route path="/appointment/login" element={<LoginAppointment />} />
             <Route path="/client" element={<Client />} />
             <Route path="/review" element={<Satisfaction />} />
             <Route path="/avis-google" element={<AvisGoogle />} />
@@ -105,6 +109,9 @@ const App = () => (
 
             <Route path="/rendezvous" element={
               <ProtectedRoute requiredRoles={['manager', 'receptionist']}><Rendezvous /></ProtectedRoute>
+            } />
+            <Route path="/appointment" element={
+              <ProtectedRoute requiredRoles={['manager']}><Appointment /></ProtectedRoute>
             } />
             <Route path="*" element={<NotFound />} />
           </Routes>

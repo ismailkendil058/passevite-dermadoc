@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Stethoscope } from 'lucide-react';
+import { Users } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 const LoginMedecin = () => {
@@ -28,7 +28,7 @@ const LoginMedecin = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedDoctorId || !password.trim()) {
-            toast.error('Veuillez sélectionner un médecin et entrer le mot de passe');
+            toast.error('Veuillez sélectionner votre nom et entrer le mot de passe');
             return;
         }
 
@@ -56,8 +56,8 @@ const LoginMedecin = () => {
             role: 'doctor'
         }));
 
-        toast.success(`Bienvenue Dr. ${matchedDoctor.name}`);
-        navigate('/doctor-dashboard');
+        toast.success(`Bienvenue ${matchedDoctor.name}`);
+        navigate('/equipe-dashboard');
     };
 
     return (
@@ -69,9 +69,9 @@ const LoginMedecin = () => {
                         <p className="text-xs tracking-[0.3em] text-muted-foreground mt-1 uppercase">le soin qui passe</p>
                     </div>
                     <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center mx-auto">
-                        <Stethoscope className="h-6 w-6 text-primary" />
+                        <Users className="h-6 w-6 text-primary" />
                     </div>
-                    <CardTitle className="text-lg font-medium text-foreground">Espace Médecin</CardTitle>
+                    <CardTitle className="text-lg font-medium text-foreground">Espace Equipe</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <form onSubmit={handleSubmit} className="space-y-4">
@@ -82,11 +82,11 @@ const LoginMedecin = () => {
                                 disabled={doctorsLoading}
                             >
                                 <SelectTrigger className="h-12">
-                                    <SelectValue placeholder={doctorsLoading ? "Chargement des médecins..." : "Sélectionner votre nom..."} />
+                                    <SelectValue placeholder={doctorsLoading ? "Chargement..." : "Sélectionner votre nom..."} />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {doctors?.map(d => (
-                                        <SelectItem key={d.id} value={d.id}>Dr. {d.name}</SelectItem>
+                                        <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>

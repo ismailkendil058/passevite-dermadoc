@@ -186,10 +186,10 @@ const Client = () => {
                     </SelectContent>
                   </Select>
                   <Select value={manualDoctor} onValueChange={setManualDoctor}>
-                    <SelectTrigger className="h-11 sm:h-12"><SelectValue placeholder="Initiale médecin" /></SelectTrigger>
+                    <SelectTrigger className="h-11 sm:h-12"><SelectValue placeholder="Initiale équipe" /></SelectTrigger>
                     <SelectContent>
                       {doctors.map(d => (
-                        <SelectItem key={d.initial} value={d.initial}>{d.initial} - Dr. {d.name}</SelectItem>
+                        <SelectItem key={d.initial} value={d.initial}>{d.initial} - {d.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -263,7 +263,7 @@ const Client = () => {
               </div>
               <div className="flex items-center justify-center gap-2 text-muted-foreground py-2 border-y border-dashed border-muted-foreground/10">
                 <Clock className="h-4 w-4" />
-                <span className="text-xs sm:text-sm font-medium tracking-wide">Dr. {queueData.doctor_name}</span>
+                <span className="text-xs sm:text-sm font-medium tracking-wide">{queueData.doctor_name}</span>
               </div>
               <Button variant="ghost" onClick={() => setQueueData(null)} className="mt-2 sm:mt-4 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-primary">
                 Nouvelle recherche

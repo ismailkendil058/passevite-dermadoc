@@ -28,6 +28,8 @@ import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 const clinic = {
   name: 'Dermadoc',
@@ -76,14 +78,40 @@ const Website = () => {
     return `${format(selectedDate, 'EEEE d MMMM yyyy', { locale: fr })} à ${selectedTime}`;
   }, [selectedDate, selectedTime]);
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!fullName.trim() || !phone.trim() || !selectedDate || !selectedTime) return;
+    if (!fullName.trim() || !phone.trim() || !selectedDate || !selectedTime) {
+      toast.error('Veuillez remplir tous les champs');
+      return;
+    }
+
     setIsSubmitting(true);
-    window.setTimeout(() => {
-      setIsSubmitting(false);
+
+    try {
+      const [hours, minutes] = selectedTime.split(':');
+      const appointmentAt = new Date(selectedDate);
+      appointmentAt.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+
+      const { error } = await supabase
+        .from('website')
+        .insert([{
+          client_name: fullName,
+          client_phone: phone,
+          appointment_at: appointmentAt.toISOString(),
+          status: 'scheduled',
+          notes: 'Source: Website'
+        }]);
+
+      if (error) throw error;
+
       setIsSubmitted(true);
-    }, 1200);
+      toast.success('Demande enregistrée avec succès');
+    } catch (error) {
+      console.error('Error submitting appointment:', error);
+      toast.error('Erreur lors de la réservation. Veuillez réessayer.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

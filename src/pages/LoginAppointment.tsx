@@ -1,0 +1,92 @@
+import React, { useState } from 'export'; // Wait, import 'export'? No, typo.
+import React, { useState } from 'react';
+import { useAuth } from '@/hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { toast } from 'sonner';
+import { Sparkles } from 'lucide-react';
+
+const LoginAppointment = () => {
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [loading, setLoading] = useState(false);
+    const { signIn } = useAuth();
+    const navigate = useNavigate();
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!username.trim() || !password.trim()) return;
+        setLoading(true);
+
+        // Login using our new custom roles table logic
+        const { error, data } = await signIn(username.trim(), password.trim());
+        setLoading(false);
+
+        if (error) {
+            toast.error('Identifiants incorrects');
+            return;
+        }
+
+        if (data?.user?.role === 'manager') {
+            navigate('/appointment');
+        } else {
+            toast.error('Accès refusé. Ce portail est réservé aux managers.');
+        }
+    };
+
+    return (
+        <div className="flex min-h-screen items-center justify-center bg-[#EFEBE6] p-4 font-sans selection:bg-[#8A9A8A]/30">
+            <Card className="w-full max-w-md shadow-2xl border-none rounded-[2.5rem] bg-white overflow-hidden">
+                <CardHeader className="text-center space-y-6 pt-10 pb-2">
+                    <div className="mx-auto block">
+                        <img src="/Untitled-1.png" alt="Logo" className="h-10 w-auto brightness-0 opacity-80 mx-auto" />
+                        <h1 className="text-3xl font-serif font-bold tracking-tight text-[#2A2A2A] mt-4 uppercase">DermaDoc</h1>
+                        <p className="text-[10px] tracking-[0.4em] text-[#8A9A8A] mt-1 font-bold">RESERVATIONS SITE WEB</p>
+                    </div>
+                    <div className="w-16 h-16 rounded-3xl bg-[#8A9A8A]/10 flex items-center justify-center mx-auto shadow-sm">
+                        <Sparkles className="h-8 w-8 text-[#8A9A8A]" />
+                    </div>
+                    <CardTitle className="font-serif text-xl font-bold text-[#2A2A2A]">Authentification Manager</CardTitle>
+                </CardHeader>
+                <CardContent className="p-8">
+                    <form onSubmit={handleSubmit} className="space-y-6">
+                        <div className="space-y-4">
+                            <Input
+                                type="text"
+                                placeholder="Nom d'utilisateur (ex: admin)"
+                                value={username}
+                                onChange={(e) => setUsername(e.target.value)}
+                                className="h-14 rounded-2xl border-none bg-[#EFEBE6]/50 focus-visible:ring-[#8A9A8A]/30 text-base"
+                                required
+                            />
+                            <Input
+                                type="password"
+                                placeholder="Mot de passe"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                className="h-14 rounded-2xl border-none bg-[#EFEBE6]/50 focus-visible:ring-[#8A9A8A]/30 text-base"
+                                required
+                            />
+                        </div>
+                        <Button
+                            type="submit"
+                            className="w-full h-14 bg-[#2A2A2A] hover:bg-[#8A9A8A] text-white rounded-full font-bold shadow-xl shadow-black/10 transition-all active:scale-95 text-base"
+                            disabled={loading}
+                        >
+                            {loading ? 'Connexion...' : 'Entrer au Dashboard'}
+                        </Button>
+
+                        <div className="mt-8 p-6 rounded-[1.5rem] bg-[#EFEBE6]/50 border border-[#8A9A8A]/10 text-center space-y-1">
+                            <p className="text-[10px] font-black text-[#8A9A8A] uppercase tracking-widest mb-2">Accès Sécurisé</p>
+                            <p className="text-xs text-[#4A4A4A] italic">Veuillez utiliser vos identifiants manager pour accéder à la gestion des réservations.</p>
+                        </div>
+                    </form>
+                </CardContent>
+            </Card>
+        </div>
+    );
+};
+
+export default LoginAppointment;

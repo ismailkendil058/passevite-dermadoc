@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { useNavigate, Link } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,7 +8,7 @@ import { toast } from 'sonner';
 import { Monitor } from 'lucide-react';
 
 const LoginAccueil = () => {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const { signIn } = useAuth();
@@ -17,74 +16,70 @@ const LoginAccueil = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim() || !password.trim()) return;
+    if (!username.trim() || !password.trim()) return;
     setLoading(true);
-    const fullEmail = email.trim().includes('@') ? email.trim() : `${email.trim()}@gmail.com`;
-    const { error, data } = await signIn(fullEmail, password.trim());
+
+    // Login using our new custom roles table logic
+    const { error, data } = await signIn(username.trim(), password.trim());
     setLoading(false);
+
     if (error) {
       toast.error('Identifiants incorrects');
       return;
     }
-    const userId = data?.user?.id || (await supabase.auth.getUser()).data.user?.id;
-    if (userId) {
-      const { data: roleData } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', userId)
-        .maybeSingle();
-      if (roleData?.role === 'receptionist') {
-        navigate('/accueil');
-      } else {
-        await supabase.auth.signOut();
-        toast.error('Accès refusé. Ce portail est réservé à l\'accueil.');
-      }
+
+    if (data?.user?.role === 'receptionist') {
+      navigate('/accueil');
+    } else {
+      toast.error('Accès refusé. Ce portail est réservé à l\'accueil.');
     }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md shadow-lg border-0">
-        <CardHeader className="text-center space-y-4 pb-2">
-          <div className="mx-auto">
-            <h1 className="text-3xl font-bold tracking-tight text-foreground italic">PasseVite</h1>
-            <p className="text-xs tracking-[0.3em] text-muted-foreground mt-1 uppercase">le soin qui passe</p>
+    <div className="flex min-h-screen items-center justify-center bg-[#EFEBE6] p-4 font-sans selection:bg-[#8A9A8A]/30">
+      <Card className="w-full max-w-md shadow-2xl border-none rounded-[2.5rem] bg-white overflow-hidden">
+        <CardHeader className="text-center space-y-6 pt-10 pb-2">
+          <div className="mx-auto block">
+            <img src="/Untitled-1.png" alt="Logo" className="h-10 w-auto brightness-0 opacity-80 mx-auto" />
+            <h1 className="text-3xl font-serif font-bold tracking-tight text-[#2A2A2A] mt-4 uppercase">DermaDoc</h1>
+            <p className="text-[10px] tracking-[0.4em] text-[#8A9A8A] mt-1 font-bold">PORTAIL ACCUEIL</p>
           </div>
-          <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center mx-auto">
-            <Monitor className="h-6 w-6 text-primary" />
+          <div className="w-16 h-16 rounded-3xl bg-[#8A9A8A]/10 flex items-center justify-center mx-auto shadow-sm">
+            <Monitor className="h-8 w-8 text-[#8A9A8A]" />
           </div>
-          <CardTitle className="text-lg font-medium text-foreground">Espace Accueil</CardTitle>
+          <CardTitle className="font-serif text-xl font-bold text-[#2A2A2A]">Espace Réception</CardTitle>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="flex">
+        <CardContent className="p-8 pb-10">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-4">
               <Input
                 type="text"
-                placeholder="nom.utilisateur"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="h-12 rounded-r-none border-r-0"
+                placeholder="Nom d'utilisateur (ex: accueil)"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="h-14 rounded-2xl border-none bg-[#EFEBE6]/50 focus-visible:ring-[#8A9A8A]/30 text-base"
                 required
               />
-              <span className="inline-flex items-center px-3 h-12 rounded-r-md border border-l-0 border-input bg-muted text-muted-foreground text-sm">
-                @gmail.com
-              </span>
+              <Input
+                type="password"
+                placeholder="Mot de passe"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="h-14 rounded-2xl border-none bg-[#EFEBE6]/50 focus-visible:ring-[#8A9A8A]/30 text-base"
+                required
+              />
             </div>
-            <Input
-              type="password"
-              placeholder="Mot de passe"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="h-12"
-              required
-            />
-            <Button type="submit" className="w-full h-12 text-base font-medium" disabled={loading}>
+            <Button
+              type="submit"
+              className="w-full h-14 bg-[#2A2A2A] hover:bg-[#8A9A8A] text-white rounded-full font-bold shadow-xl shadow-black/10 transition-all active:scale-95 text-base"
+              disabled={loading}
+            >
               {loading ? 'Connexion...' : 'Se connecter'}
             </Button>
-            <div className="mt-6 p-4 rounded-xl bg-secondary/50 border border-primary/10 text-center">
-              <p className="text-xs font-semibold text-primary uppercase tracking-wider mb-1">Compte Démo</p>
-              <p className="text-xs text-muted-foreground">Utilisateur: <span className="text-foreground font-medium">accueil</span></p>
-              <p className="text-xs text-muted-foreground">Mot de passe: <span className="text-foreground font-medium">accueil123</span></p>
+
+            <div className="mt-8 p-6 rounded-[1.8rem] bg-[#8A9A8A]/5 border border-[#8A9A8A]/10 text-center">
+              <p className="text-[10px] font-black text-[#8A9A8A] uppercase tracking-widest mb-1">Accès Restreint</p>
+              <p className="text-xs text-[#4A4A4A] italic font-light font-serif">Veuillez entrer vos identifiants de session pour ouvrir la file d'attente.</p>
             </div>
           </form>
         </CardContent>

@@ -1,12 +1,16 @@
 import { useState, useEffect, createContext, useContext, ReactNode, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import type { User, Session } from '@supabase/supabase-js';
+
+interface AuthUser {
+  id: string;
+  username: string;
+  role: string;
+}
 
 interface AuthContextType {
-  user: User | null;
-  session: Session | null;
+  user: any;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null; data: any }>;
+  signIn: (username: string, password: string) => Promise<{ error: Error | null; data: any }>;
   signOut: () => Promise<void>;
   userRole: string | null;
 }
@@ -14,124 +18,69 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string | null>(null);
 
-  const fetchUserRole = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', userId)
-        .maybeSingle();
+  useEffect(() => {
+    // Check localStorage for a manual session
+    const savedUser = localStorage.getItem('dermadoc_user');
+    if (savedUser) {
+      try {
+        const parsed = JSON.parse(savedUser);
+        setUser(parsed);
+        setUserRole(parsed.role);
+      } catch (e) {
+        console.error("Failed to parse saved user", e);
+      }
+    }
+    setLoading(false);
+  }, []);
 
-      if (error) {
-        console.error('Failed to fetch user role:', error);
-        return null;
+  const signIn = async (username: string, password: string) => {
+    try {
+      // Query our custom 'roles' table
+      const { data, error } = await supabase
+        .from('roles')
+        .select('*')
+        .eq('username', username)
+        .eq('password', password)
+        .single();
+
+      if (error || !data) {
+        return { error: new Error('Identifiants incorrects'), data: null };
       }
 
-      return data?.role ?? null;
-    } catch (error) {
-      console.error('Unexpected error while fetching user role:', error);
-      return null;
+      const mockUser = {
+        id: data.id,
+        email: `${data.username}@gmail.com`,
+        username: data.username,
+        role: data.role
+      };
+
+      localStorage.setItem('dermadoc_user', JSON.stringify(mockUser));
+      setUser(mockUser);
+      setUserRole(data.role);
+
+      return { error: null, data: { user: mockUser } };
+    } catch (e) {
+      return { error: e as Error, data: null };
     }
   };
 
-  useEffect(() => {
-    let mounted = true;
-
-    // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        if (!mounted) return;
-
-        setSession(session);
-        setUser(session?.user ?? null);
-
-        if (session?.user) {
-          // Use setTimeout to avoid blocking and ensure state updates
-          setTimeout(async () => {
-            if (!mounted) return;
-
-            try {
-              const role = await fetchUserRole(session.user.id);
-              if (mounted) {
-                setUserRole(role);
-              }
-            } catch (error) {
-              console.error('Failed to update auth state:', error);
-              if (mounted) {
-                setUserRole(null);
-              }
-            } finally {
-              if (mounted) {
-                setLoading(false);
-              }
-            }
-          }, 0);
-        } else {
-          setUserRole(null);
-          setLoading(false);
-        }
-      }
-    );
-
-    // Then get the initial session
-    void (async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!mounted) return;
-
-        setSession(session);
-        setUser(session?.user ?? null);
-
-        if (session?.user) {
-          const role = await fetchUserRole(session.user.id);
-          if (mounted) {
-            setUserRole(role);
-          }
-        } else if (mounted) {
-          setUserRole(null);
-        }
-      } catch (error) {
-        console.error('Failed to restore auth session:', error);
-        if (mounted) {
-          setSession(null);
-          setUser(null);
-          setUserRole(null);
-        }
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  const signIn = async (email: string, password: string) => {
-    const { error, data } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error as Error | null, data };
-  };
-
   const signOut = async () => {
-    await supabase.auth.signOut();
+    localStorage.removeItem('dermadoc_user');
+    setUser(null);
+    setUserRole(null);
   };
 
   const contextValue = useMemo(() => ({
     user,
-    session,
     loading,
     signIn,
     signOut,
     userRole
-  }), [user, session, loading, userRole]);
+  }), [user, loading, userRole]);
 
   return (
     <AuthContext.Provider value={contextValue}>

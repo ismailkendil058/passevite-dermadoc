@@ -57,7 +57,7 @@ const TV = () => {
     const text =
       `${displayName}, ` +
       `veuillez vous présenter, s'il vous plaît, ` +
-      `au cabinet du Docteur ${doctorName}. ` +
+      `au cabinet de l'équipe ${doctorName}. ` +
       `Merci.`;
 
     const utter = new SpeechSynthesisUtterance(text);
