@@ -72,6 +72,8 @@ const Rendezvous = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedClient, setSelectedClient] = useState<{ phone: string, name: string } | null>(null);
     const [selectedDoctorMobile, setSelectedDoctorMobile] = useState<string>('all');
+    const [viewingPatient, setViewingPatient] = useState<{ phone: string; name: string } | null>(null);
+    const [selectedTreatment, setSelectedTreatment] = useState<string | null>(null);
     const [isScheduleOpen, setIsScheduleOpen] = useState(false);
     const [viewingClient, setViewingClient] = useState<CompletedClient | null>(null);
 
@@ -283,8 +285,26 @@ const Rendezvous = () => {
             .sort((a, b) => a.client_name.localeCompare(b.client_name));
     }, [clients]);
 
-    // Use uniqueClients directly because sorting and filtering is handled server-side now
-    const filteredClients = uniqueClients;
+    // Group by patient (phone + name) to build dossier entries with multiple treatments
+    const groupedPatients = useMemo(() => {
+        const map = new Map<string, { name: string; phone: string; treatments: Array<{ treatment: string; latest: CompletedClient; totalPaid: number }> }>();
+        uniqueClients.forEach(c => {
+            const key = `${c.phone}_${c.client_name.toLowerCase().trim()}`;
+            const existing = map.get(key);
+            if (!existing) {
+                map.set(key, {
+                    name: c.client_name,
+                    phone: c.phone,
+                    treatments: [{ treatment: c.treatment || '—', latest: c, totalPaid: (c as any).totalPaid || 0 }]
+                });
+            } else {
+                existing.treatments.push({ treatment: c.treatment || '—', latest: c, totalPaid: (c as any).totalPaid || 0 });
+            }
+        });
+        return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+    }, [uniqueClients]);
+
+    const filteredClients = uniqueClients; // keep for other uses
 
     const parsedAppointments = useMemo(() => {
         return appointments.map(a => ({
@@ -429,6 +449,44 @@ const Rendezvous = () => {
         );
         const appts = appointments.filter(a => a.client_phone === phone && a.client_name.toLowerCase().trim() === name.toLowerCase().trim());
         return { history, appts };
+    };
+
+    const getPatientTreatments = (phone: string, name: string) => {
+        const entries = clients.filter(c => c.phone === phone && c.client_name.toLowerCase().trim() === name.toLowerCase().trim());
+        const map = new Map<string, { entries: CompletedClient[]; totalPaid: number; latestTotal: number }>();
+        entries.forEach(e => {
+            const key = e.treatment || '—';
+            const existing = map.get(key) || { entries: [], totalPaid: 0, latestTotal: 0 };
+            existing.entries.push(e);
+            existing.totalPaid += e.tranche_paid || 0;
+            const ts = new Date(e.completed_at).getTime();
+            // keep latest total_amount
+            if (!existing.latestTotal || ts > (existing.entries[0] ? new Date(existing.entries[0].completed_at).getTime() : 0)) {
+                existing.latestTotal = e.total_amount || 0;
+            }
+            map.set(key, existing);
+        });
+
+        const treatments = Array.from(map.entries()).map(([t, v]) => ({ treatment: t, entries: v.entries.sort((a,b) => new Date(b.completed_at).getTime() - new Date(a.completed_at).getTime()), totalPaid: v.totalPaid, latestTotal: v.latestTotal }));
+
+        const apptsById = new Map<string, Appointment>();
+        appointments.forEach(a => apptsById.set(a.id, a));
+
+        const getApptsForTreatment = (treatment: string) => {
+            const ids = new Set((map.get(treatment)?.entries || []).map(e => (e as any).appointment_id).filter(Boolean));
+            const result: Appointment[] = [];
+            ids.forEach(id => {
+                const a = apptsById.get(id as string);
+                if (a) result.push(a);
+            });
+            // fallback: also include appointments matching phone/name
+            if (result.length === 0) {
+                return appointments.filter(a => a.client_phone === phone && a.client_name.toLowerCase().trim() === name.toLowerCase().trim());
+            }
+            return result;
+        };
+
+        return { treatments, getApptsForTreatment };
     };
 
     return (
@@ -593,20 +651,20 @@ const Rendezvous = () => {
                             <div className="grid gap-2">
                                 {loading ? (
                                     <p className="text-center py-10 text-muted-foreground">Chargement...</p>
-                                ) : filteredClients.length === 0 ? (
+                                ) : groupedPatients.length === 0 ? (
                                     <p className="text-center py-10 text-muted-foreground">Aucun patient trouvé</p>
                                 ) : (
-                                    filteredClients.map(client => (
-                                        <Card key={`${client.phone}_${client.client_name}_${client.treatment}`} onClick={() => setViewingClient(client)} className="cursor-pointer hover:border-primary/30 hover:bg-primary/[0.02] transition-all group">
+                                    groupedPatients.map(patient => (
+                                        <Card key={`${patient.phone}_${patient.name}`} onClick={() => { setViewingPatient({ phone: patient.phone, name: patient.name }); setSelectedTreatment(null); }} className="cursor-pointer hover:border-primary/30 hover:bg-primary/[0.02] transition-all group">
                                             <CardContent className="p-4 flex items-center justify-between">
                                                 <div className="space-y-1">
-                                                    <p className="font-bold text-foreground group-hover:text-primary transition-colors">{client.client_name}</p>
-                                                    <p className="text-xs text-muted-foreground">{client.phone} · <span className="text-primary/70">{client.treatment}</span></p>
+                                                    <p className="font-bold text-foreground group-hover:text-primary transition-colors">{patient.name}</p>
+                                                    <p className="text-xs text-muted-foreground">{patient.phone} · <span className="text-primary/70">{patient.treatments.map(t => t.treatment).slice(0,2).join(', ')}</span></p>
                                                 </div>
                                                 <div className="flex items-center gap-3">
                                                     <div className="text-right hidden sm:block">
                                                         <p className="text-[10px] text-muted-foreground uppercase font-medium">Dernière visite</p>
-                                                        <p className="text-xs font-semibold">{format(parseISO(client.completed_at), 'dd/MM/yyyy')}</p>
+                                                        <p className="text-xs font-semibold">{format(parseISO(patient.treatments[0]?.latest.completed_at || new Date().toISOString()), 'dd/MM/yyyy')}</p>
                                                     </div>
                                                     <Plus className="h-5 w-5 text-muted-foreground group-hover:text-primary" />
                                                 </div>
@@ -616,118 +674,141 @@ const Rendezvous = () => {
                                 )}
                             </div>
 
-                            <Dialog open={!!viewingClient} onOpenChange={(open) => !open && setViewingClient(null)}>
+                            <Dialog open={!!viewingPatient} onOpenChange={(open) => !open && setViewingPatient(null)}>
                                 <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 overflow-hidden sm:rounded-2xl">
-                                    {viewingClient && (
-                                        <>
-                                            <DialogHeader className="p-6 pb-2">
-                                                <DialogTitle className="text-2xl font-black italic text-primary">Dossier Patient</DialogTitle>
-                                            </DialogHeader>
+                                    {viewingPatient && (() => {
+                                        const patientData = getPatientTreatments(viewingPatient.phone, viewingPatient.name);
+                                        const treatments = patientData.treatments;
+                                        const chosen = selectedTreatment || (treatments[0] && treatments[0].treatment) || null;
+                                        const entriesForChosen = treatments.find(t => t.treatment === chosen)?.entries || [];
+                                        const totalPaidForChosen = treatments.find(t => t.treatment === chosen)?.totalPaid || 0;
+                                        const latestTotalForChosen = treatments.find(t => t.treatment === chosen)?.latestTotal || 0;
 
-                                            <div className="p-6 pt-0 flex-1 overflow-y-auto space-y-6">
-                                                <div className="bg-primary/5 p-4 rounded-xl flex items-center justify-between">
-                                                    <div>
-                                                        <h3 className="text-lg font-bold">{viewingClient.client_name}</h3>
-                                                        <p className="text-sm font-medium text-primary">{viewingClient.phone}</p>
-                                                    </div>
-                                                    <div className="flex flex-col sm:flex-row gap-2">
-                                                        <Button variant="default" size="sm" className="gap-2" onClick={() => {
-                                                            setSelectedClient({ phone: viewingClient.phone, name: viewingClient.client_name });
-                                                            setIsScheduleOpen(true);
-                                                        }}>
-                                                            <Plus className="h-4 w-4" /> Nouveau RDV
-                                                        </Button>
-                                                        {['manager', 'admin'].includes(userRole || '') && (
-                                                            <Button variant="outline" size="sm" className="gap-2" onClick={() => setEditingVisit(viewingClient)}>
-                                                                <Users className="h-4 w-4" /> Modifier Patient
+                                        return (
+                                            <>
+                                                <DialogHeader className="p-6 pb-2">
+                                                    <DialogTitle className="text-2xl font-black italic text-primary">Dossier Patient</DialogTitle>
+                                                </DialogHeader>
+
+                                                <div className="p-6 pt-0 flex-1 overflow-y-auto space-y-6">
+                                                    <div className="bg-primary/5 p-4 rounded-xl flex items-center justify-between">
+                                                        <div>
+                                                            <h3 className="text-lg font-bold">{viewingPatient.name}</h3>
+                                                            <p className="text-sm font-medium text-primary">{viewingPatient.phone}</p>
+                                                        </div>
+                                                        <div className="flex flex-col sm:flex-row gap-2">
+                                                            <Button variant="default" size="sm" className="gap-2" onClick={() => {
+                                                                setSelectedClient({ phone: viewingPatient.phone, name: viewingPatient.name });
+                                                                setIsScheduleOpen(true);
+                                                            }}>
+                                                                <Plus className="h-4 w-4" /> Nouveau RDV
                                                             </Button>
-                                                        )}
+                                                            {['manager', 'admin'].includes(userRole || '') && (
+                                                                <Button variant="outline" size="sm" className="gap-2" onClick={() => setEditingVisit(entriesForChosen[0] || null)}>
+                                                                    <Users className="h-4 w-4" /> Modifier Patient
+                                                                </Button>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                </div>
 
-                                                <div className="space-y-4">
-                                                    <h4 className="text-xs font-black text-muted-foreground uppercase tracking-widest flex items-center gap-2">
-                                                        <History className="h-3.5 w-3.5" /> Historique des Paiements
-                                                    </h4>
-                                                    <div className="border rounded-xl overflow-hidden">
-                                                        <Table>
-                                                            <TableHeader className="bg-muted/50">
-                                                                <TableRow>
-                                                                    <TableHead className="text-xs h-9">Date</TableHead>
-                                                                    <TableHead className="text-xs h-9">Traitement</TableHead>
-                                                                    <TableHead className="text-xs h-9">Note</TableHead>
-                                                                    <TableHead className="text-xs h-9 text-right">Total</TableHead>
-                                                                    <TableHead className="text-xs h-9 text-right">Payé</TableHead>
-                                                                    <TableHead className="text-xs h-9 text-right uppercase font-black">Admin</TableHead>
-                                                                    {['manager', 'admin'].includes(userRole || '') && <TableHead className="text-xs h-9 text-right uppercase font-black">Actions</TableHead>}
-                                                                </TableRow>
-                                                            </TableHeader>
-                                                            <TableBody>
-                                                                {getClientHistory(viewingClient.phone, viewingClient.client_name, viewingClient.treatment).history.map((h: any) => (
-                                                                    <TableRow key={h.id}>
-                                                                        <TableCell className="text-xs py-2">{format(parseISO(h.completed_at), 'dd/MM/yy')}</TableCell>
-                                                                        <TableCell className="text-xs py-2">
-                                                                            <div>{h.treatment}</div>
-                                                                        </TableCell>
-                                                                        <TableCell className="text-xs py-2 text-slate-500 max-w-[150px] truncate" title={h.notes}>{h.notes || '-'}</TableCell>
-                                                                        <TableCell className="text-xs py-2 text-right font-medium">{h.total_amount?.toLocaleString()}</TableCell>
-                                                                        <TableCell className="text-xs py-2 text-right text-emerald-600 font-bold">{h.tranche_paid?.toLocaleString()}</TableCell>
-                                                                        {['manager', 'admin'].includes(userRole || '') && (
-                                                                            <TableCell className="text-xs py-2 text-right">
-                                                                                <div className="flex justify-end gap-1">
-                                                                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-500 hover:bg-blue-50" onClick={() => setEditingVisit(h)}>
-                                                                                        <Plus className="h-3.5 w-3.5 rotate-45" /> {/* Use Plus rotated for edit or History icon */}
-                                                                                        <Users className="h-3.5 w-3.5" />
-                                                                                    </Button>
-                                                                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-rose-500 hover:bg-rose-50" onClick={() => handleDeleteVisit(h.id)}>
-                                                                                        <XCircle className="h-3.5 w-3.5" />
-                                                                                    </Button>
-                                                                                </div>
-                                                                            </TableCell>
-                                                                        )}
+                                                    <div className="space-y-4">
+                                                        <h4 className="text-xs font-black text-muted-foreground uppercase tracking-widest flex items-center gap-2">
+                                                            <History className="h-3.5 w-3.5" /> Traitements
+                                                        </h4>
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {treatments.length === 0 ? (
+                                                                <div className="text-xs text-muted-foreground">Aucun traitement enregistré</div>
+                                                            ) : (
+                                                                treatments.map(t => (
+                                                                    <Button key={t.treatment} variant={chosen === t.treatment ? 'secondary' : 'outline'} size="sm" onClick={() => setSelectedTreatment(t.treatment)}>
+                                                                        <span className="mr-2">{t.treatment}</span>
+                                                                        <span className="text-xs">{t.totalPaid.toLocaleString()} / {t.latestTotal.toLocaleString()} DZD</span>
+                                                                    </Button>
+                                                                ))
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-4">
+                                                        <h4 className="text-xs font-black text-muted-foreground uppercase tracking-widest flex items-center gap-2">
+                                                            <History className="h-3.5 w-3.5" /> Historique des Paiements
+                                                        </h4>
+                                                        <div className="border rounded-xl overflow-hidden">
+                                                            <Table>
+                                                                <TableHeader className="bg-muted/50">
+                                                                    <TableRow>
+                                                                        <TableHead className="text-xs h-9">Date</TableHead>
+                                                                        <TableHead className="text-xs h-9">Traitement</TableHead>
+                                                                        <TableHead className="text-xs h-9">Note</TableHead>
+                                                                        <TableHead className="text-xs h-9 text-right">Total</TableHead>
+                                                                        <TableHead className="text-xs h-9 text-right">Payé</TableHead>
+                                                                        <TableHead className="text-xs h-9 text-right uppercase font-black">Admin</TableHead>
+                                                                        {['manager', 'admin'].includes(userRole || '') && <TableHead className="text-xs h-9 text-right uppercase font-black">Actions</TableHead>}
                                                                     </TableRow>
-                                                                ))}
-                                                            </TableBody>
-                                                        </Table>
+                                                                </TableHeader>
+                                                                <TableBody>
+                                                                    {entriesForChosen.map((h: any) => (
+                                                                        <TableRow key={h.id}>
+                                                                            <TableCell className="text-xs py-2">{format(parseISO(h.completed_at), 'dd/MM/yy')}</TableCell>
+                                                                            <TableCell className="text-xs py-2"><div>{h.treatment}</div></TableCell>
+                                                                            <TableCell className="text-xs py-2 text-slate-500 max-w-[150px] truncate" title={h.notes}>{h.notes || '-'}</TableCell>
+                                                                            <TableCell className="text-xs py-2 text-right font-medium">{h.total_amount?.toLocaleString()}</TableCell>
+                                                                            <TableCell className="text-xs py-2 text-right text-emerald-600 font-bold">{h.tranche_paid?.toLocaleString()}</TableCell>
+                                                                            {['manager', 'admin'].includes(userRole || '') && (
+                                                                                <TableCell className="text-xs py-2 text-right">
+                                                                                    <div className="flex justify-end gap-1">
+                                                                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-500 hover:bg-blue-50" onClick={() => setEditingVisit(h)}>
+                                                                                            <Plus className="h-3.5 w-3.5 rotate-45" />
+                                                                                            <Users className="h-3.5 w-3.5" />
+                                                                                        </Button>
+                                                                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-rose-500 hover:bg-rose-50" onClick={() => handleDeleteVisit(h.id)}>
+                                                                                            <XCircle className="h-3.5 w-3.5" />
+                                                                                        </Button>
+                                                                                    </div>
+                                                                                </TableCell>
+                                                                            )}
+                                                                        </TableRow>
+                                                                    ))}
+                                                                </TableBody>
+                                                            </Table>
+                                                        </div>
                                                     </div>
-                                                </div>
 
-                                                <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 flex justify-between items-center">
-                                                    <div>
-                                                        <p className="text-[10px] uppercase font-bold text-emerald-600">Total payé pour ce traitement</p>
-                                                        <p className="text-2xl font-black text-emerald-700">
-                                                            {(viewingClient as any).totalPaid?.toLocaleString()} DZD
-                                                        </p>
+                                                    <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 flex justify-between items-center">
+                                                        <div>
+                                                            <p className="text-[10px] uppercase font-bold text-emerald-600">Total payé pour ce traitement</p>
+                                                            <p className="text-2xl font-black text-emerald-700">{totalPaidForChosen.toLocaleString()} DZD</p>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className="text-[10px] uppercase font-bold text-emerald-600">Montant total</p>
+                                                            <p className="text-lg font-bold text-emerald-800">{latestTotalForChosen.toLocaleString()} DZD</p>
+                                                        </div>
                                                     </div>
-                                                    <div className="text-right">
-                                                        <p className="text-[10px] uppercase font-bold text-emerald-600">Montant total</p>
-                                                        <p className="text-lg font-bold text-emerald-800">{viewingClient.total_amount?.toLocaleString()} DZD</p>
-                                                    </div>
-                                                </div>
 
-                                                <div className="space-y-4">
-                                                    <h4 className="text-xs font-black text-muted-foreground uppercase tracking-widest flex items-center gap-2">
-                                                        <CalendarIcon className="h-3.5 w-3.5" /> Historique des Rendez-vous
-                                                    </h4>
-                                                    <div className="space-y-2">
-                                                        {getClientHistory(viewingClient.phone, viewingClient.client_name, viewingClient.treatment).appts.length === 0 ? (
-                                                            <p className="text-sm text-center py-4 bg-muted/20 rounded-xl text-muted-foreground">Aucun historique de rendez-vous</p>
-                                                        ) : (
-                                                            getClientHistory(viewingClient.phone, viewingClient.client_name, viewingClient.treatment).appts.map(a => (
-                                                                <div key={a.id} className="flex items-center justify-between p-3 rounded-xl border text-sm">
-                                                                    <div>
-                                                                        <p className="font-semibold">{format(parseISO(a.appointment_at), 'PPp', { locale: fr })}</p>
-                                                                        <p className="text-xs text-muted-foreground">Dr. {a.doctor?.name || '...'}</p>
+                                                    <div className="space-y-4">
+                                                        <h4 className="text-xs font-black text-muted-foreground uppercase tracking-widest flex items-center gap-2">
+                                                            <CalendarIcon className="h-3.5 w-3.5" /> Historique des Rendez-vous
+                                                        </h4>
+                                                        <div className="space-y-2">
+                                                            {patientData.getApptsForTreatment(chosen || '') .length === 0 ? (
+                                                                <p className="text-sm text-center py-4 bg-muted/20 rounded-xl text-muted-foreground">Aucun historique de rendez-vous</p>
+                                                            ) : (
+                                                                patientData.getApptsForTreatment(chosen || '').map(a => (
+                                                                    <div key={a.id} className="flex items-center justify-between p-3 rounded-xl border text-sm">
+                                                                        <div>
+                                                                            <p className="font-semibold">{format(parseISO(a.appointment_at), 'PPp', { locale: fr })}</p>
+                                                                            <p className="text-xs text-muted-foreground">Dr. {a.doctor?.name || '...'}</p>
+                                                                        </div>
+                                                                        <Badge variant="outline" className={`text-[10px] capitalize ${getStatusStyle(a.status)}`}>{a.status}</Badge>
                                                                     </div>
-                                                                    <Badge variant="outline" className={`text-[10px] capitalize ${getStatusStyle(a.status)}`}>{a.status}</Badge>
-                                                                </div>
-                                                            ))
-                                                        )}
+                                                                ))
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        </>
-                                    )}
+                                            </>
+                                        );
+                                    })()}
                                 </DialogContent>
                             </Dialog>
 
