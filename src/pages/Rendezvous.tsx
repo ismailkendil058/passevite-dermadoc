@@ -344,8 +344,24 @@ const Rendezvous = () => {
 
     const handleSendWhatsApp = (phone: string, name: string, time: string) => {
         const message = `Clinique DermaDoc : votre rendez-vous avec notre équipe est dans 24h. Merci de confirmer votre présence.`;
-        // Normalize phone to digits only for wa.me; leave as-is if empty
-        const digits = (phone || '').replace(/\D/g, '');
+        const normalizePhoneForWhatsApp = (p: string) => {
+            let digits = (p || '').replace(/\D/g, '');
+            if (!digits) return '';
+            // Strip leading international 00 or +
+            if (digits.startsWith('00')) digits = digits.replace(/^00/, '');
+            // If it still starts with 0, assume local format and prepend Algeria country code '213'
+            if (digits.startsWith('0')) {
+                digits = '213' + digits.slice(1);
+            }
+            return digits;
+        };
+
+        const digits = normalizePhoneForWhatsApp(phone);
+        if (!digits) {
+            toast.error('Numéro WhatsApp invalide');
+            return;
+        }
+
         const waUrl = `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
         window.open(waUrl, '_blank');
     };
