@@ -518,7 +518,7 @@ const Accueil = () => {
       const { error } = await supabase.from('expenses').insert({
         amount: parseFloat(expenseAmount),
         description: expenseDesc,
-        date: new Date().toISOString(),
+        date: format(new Date(), 'yyyy-MM-dd'),
         created_by: user?.id
       });
       if (error) throw error;
