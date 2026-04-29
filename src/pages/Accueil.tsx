@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Phone, Plus, LogOut, ChevronRight, ChevronLeft, Users, Clock, CheckCircle, XCircle, MessageCircle, Pencil, Trash2, UserCheck, Calendar as CalendarIcon, DollarSign, ShoppingCart, Sparkles } from 'lucide-react';
+import { Phone, Plus, LogOut, ChevronRight, ChevronLeft, ChevronUp, ChevronDown, Users, Clock, CheckCircle, XCircle, MessageCircle, Pencil, Trash2, UserCheck, Calendar as CalendarIcon, DollarSign, ShoppingCart, Sparkles } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -149,12 +149,24 @@ const Accueil = () => {
   const [expenseDesc, setExpenseDesc] = useState('');
   const [savingExpense, setSavingExpense] = useState(false);
   const doctorsScrollRef = useRef<HTMLDivElement>(null);
+  const todayModalScrollRef = useRef<HTMLDivElement>(null);
+  const completeModalScrollRef = useRef<HTMLDivElement>(null);
 
   const scrollDoctors = (direction: 'left' | 'right') => {
     if (doctorsScrollRef.current) {
       const scrollAmount = 150;
       doctorsScrollRef.current.scrollBy({
         left: direction === 'left' ? -scrollAmount : scrollAmount,
+        behavior: 'smooth'
+      });
+    }
+  };
+
+  const scrollModal = (ref: React.RefObject<HTMLDivElement>, direction: 'up' | 'down') => {
+    if (ref.current) {
+      const scrollAmount = 220;
+      ref.current.scrollBy({
+        top: direction === 'up' ? -scrollAmount : scrollAmount,
         behavior: 'smooth'
       });
     }
@@ -601,13 +613,15 @@ const Accueil = () => {
           <Button onClick={async () => {
             try {
               setLoadingTodayClients(true);
-              const start = new Date(); start.setHours(0,0,0,0);
-              const end = new Date(); end.setHours(23,59,59,999);
+              const start = new Date();
+              start.setHours(0, 0, 0, 0);
+              const nextStart = new Date(start);
+              nextStart.setDate(nextStart.getDate() + 1);
               const { data } = await supabase
                 .from('completed_clients')
                 .select('*, doctor:doctors(name)')
                 .gte('completed_at', start.toISOString())
-                .lte('completed_at', end.toISOString())
+                .lt('completed_at', nextStart.toISOString())
                 .order('completed_at', { ascending: false });
               setTodayClients(data || []);
             } catch (err) {
@@ -678,13 +692,22 @@ const Accueil = () => {
 
       {/* Today's completed clients modal (Terminer) */}
       <Dialog open={showTodayModal} onOpenChange={setShowTodayModal}>
-        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-2xl">
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-2xl max-h-[calc(100vh-4rem)] overflow-hidden">
           <DialogHeader>
             <DialogTitle>Clients traités aujourd'hui</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 py-2">
-            {loadingTodayClients ? (
-              <div className="flex items-center justify-center p-6">
+          <div className="relative">
+            <div className="absolute right-3 top-3 z-20 flex flex-col gap-2">
+              <Button variant="ghost" size="icon" className="h-8 w-8 bg-background/80 shadow-sm" onClick={() => scrollModal(todayModalScrollRef, 'up')}>
+                <ChevronUp className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8 bg-background/80 shadow-sm" onClick={() => scrollModal(todayModalScrollRef, 'down')}>
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+            </div>
+            <div ref={todayModalScrollRef} className="max-h-[calc(100vh-28rem)] overflow-y-auto space-y-3 py-2 pr-2">
+              {loadingTodayClients ? (
+                <div className="flex items-center justify-center p-6">
                 <div className="w-8 h-8 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
               </div>
             ) : todayClients.length === 0 ? (
@@ -929,13 +952,22 @@ const Accueil = () => {
 
       {/* Complete Client Modal */}
       <Dialog open={showCompleteModal} onOpenChange={setShowCompleteModal}>
-        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md">
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[calc(100vh-4rem)] overflow-hidden">
           <DialogHeader>
             <DialogTitle>Finaliser · {selectedEntry?.client_id}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 sm:space-y-4">
-            <Input
-              placeholder="Nom du client"
+          <div className="relative">
+            <div className="absolute right-3 top-3 z-20 flex flex-col gap-2">
+              <Button variant="ghost" size="icon" className="h-8 w-8 bg-background/80 shadow-sm" onClick={() => scrollModal(completeModalScrollRef, 'up')}>
+                <ChevronUp className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8 bg-background/80 shadow-sm" onClick={() => scrollModal(completeModalScrollRef, 'down')}>
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+            </div>
+            <div ref={completeModalScrollRef} className="max-h-[calc(100vh-28rem)] overflow-y-auto space-y-3 sm:space-y-4 pr-2 pb-2">
+              <Input
+                placeholder="Nom du client"
               value={clientName}
               onChange={(e) => setClientName(e.target.value)}
               className="h-11 sm:h-12"
