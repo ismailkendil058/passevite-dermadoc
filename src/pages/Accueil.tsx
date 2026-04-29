@@ -708,32 +708,33 @@ const Accueil = () => {
             <div ref={todayModalScrollRef} className="max-h-[calc(100vh-28rem)] overflow-y-auto space-y-3 py-2 pr-2">
               {loadingTodayClients ? (
                 <div className="flex items-center justify-center p-6">
-                <div className="w-8 h-8 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
-              </div>
-            ) : todayClients.length === 0 ? (
-              <div className="p-6 text-center text-muted-foreground">Aucun client traité aujourd'hui.</div>
-            ) : (
-              <div className="space-y-2">
-                {todayClients.map((c: any) => (
-                  <Card key={c.id} className="border-0 shadow-sm">
-                    <CardContent className="p-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="font-bold text-foreground">{c.client_name}</div>
-                          <div className="text-xs text-muted-foreground">{c.phone} · {c.doctor?.name || '—'}</div>
+                  <div className="w-8 h-8 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+                </div>
+              ) : todayClients.length === 0 ? (
+                <div className="p-6 text-center text-muted-foreground">Aucun client traité aujourd'hui.</div>
+              ) : (
+                <div className="space-y-2">
+                  {todayClients.map((c: any) => (
+                    <Card key={c.id} className="border-0 shadow-sm">
+                      <CardContent className="p-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-bold text-foreground">{c.client_name}</div>
+                            <div className="text-xs text-muted-foreground">{c.phone} · {c.doctor?.name || '—'}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-sm font-semibold">{(c.total_amount || 0).toLocaleString()} DZD</div>
+                            <div className="text-xs text-muted-foreground">Payé: {(c.tranche_paid || 0).toLocaleString()} DZD</div>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <div className="text-sm font-semibold">{(c.total_amount || 0).toLocaleString()} DZD</div>
-                          <div className="text-xs text-muted-foreground">Payé: {(c.tranche_paid || 0).toLocaleString()} DZD</div>
-                        </div>
-                      </div>
-                      <div className="mt-2 text-sm text-muted-foreground">Traitement: {c.treatment}</div>
-                      {c.notes && <div className="mt-1 text-xs text-muted-foreground">Note: {c.notes}</div>}
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
+                        <div className="mt-2 text-sm text-muted-foreground">Traitement: {c.treatment}</div>
+                        {c.notes && <div className="mt-1 text-xs text-muted-foreground">Note: {c.notes}</div>}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           <DialogFooter>
             <Button onClick={() => setShowTodayModal(false)} className="w-full">Fermer</Button>
