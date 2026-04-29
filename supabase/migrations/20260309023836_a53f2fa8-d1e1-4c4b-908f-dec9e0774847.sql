@@ -136,10 +136,9 @@ create policy "Users can update own profile" on public.profiles for update to au
 
 -- Seed doctors
 insert into public.doctors (name, initial) values
-  ('Nassim', 'N'),
-  ('Fatema', 'F'),
-  ('Nouh', 'L'),
-  ('Mohamed', 'M');
+  ('Djihane', 'D'),
+  ('Zineb', 'Z'),
+  ('Imane', 'I');
 
 -- Enable realtime
 alter publication supabase_realtime add table queue_entries;

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -32,6 +32,7 @@ const TREATMENTS = [
   'Epilation au laser',
   'Consultation'
 ];
+
 
 const QueueItem = React.memo(({ entry, index, onEdit, onDelete, onNext }: { entry: QueueEntry; index: number; onEdit: (e: QueueEntry) => void; onDelete: (id: string) => void; onNext: (e: QueueEntry) => void }) => {
   const stateColors = {
@@ -71,7 +72,7 @@ const QueueItem = React.memo(({ entry, index, onEdit, onDelete, onNext }: { entr
               <Phone className="h-5 w-5" />
             </a>
             <a
-              href={`sms:${entry.phone}?body=${encodeURIComponent(". Cabinet PasseVite : votre tour arrive bientôt.\nVous pouvez suivre le nombre de patients avant vous ici :\nhttps://passevite.vercel.app/client\nدوركم سيأتي قريبًا.")}`}
+              href={`sms:${entry.phone}?body=${encodeURIComponent("Clinique DermaDoc : votre tour arrive bientôt.\nVous pouvez suivre le nombre de patients avant vous ici :\nhttps://passevite-dermadoc.vercel.app/client\nدوركم سيأتي قريبًا.")}`}
               className="text-primary flex items-center justify-center p-1.5 hover:bg-secondary/50 rounded-full transition-colors"
               title="Envoyer un SMS"
             >
@@ -131,6 +132,9 @@ const Accueil = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showTodayModal, setShowTodayModal] = useState(false);
+  const [todayClients, setTodayClients] = useState<any[]>([]);
+  const [loadingTodayClients, setLoadingTodayClients] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<QueueEntry | null>(null);
   const [editEntry, setEditEntry] = useState<QueueEntry | null>(null);
   const [editPhone, setEditPhone] = useState('');
@@ -177,9 +181,30 @@ const Accueil = () => {
   const [nextApptTime, setNextApptTime] = useState('09:00');
   const [nextApptDoctorId, setNextApptDoctorId] = useState('');
 
+  // Treatments list (load from localStorage to allow adding custom treatments)
+  const [treatmentsList, setTreatmentsList] = useState<string[]>(TREATMENTS);
+  const [showTreatmentSuggestions, setShowTreatmentSuggestions] = useState(false);
+
 
   // Memoize statistics to avoid recalculating on every render
   const stats = useMemo(() => getStats(), [entries, inCabinetEntries, getStats]);
+
+  // Load persisted treatments from localStorage once
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('pv_treatments');
+      if (raw) {
+        const parsed = JSON.parse(raw) as string[];
+        if (Array.isArray(parsed)) {
+          // Merge with default treatments preserving uniqueness
+          const merged = Array.from(new Set([...parsed, ...TREATMENTS]));
+          setTreatmentsList(merged);
+        }
+      }
+    } catch (err) {
+      // ignore
+    }
+  }, []);
 
   // Memoize statistics by doctor
   const doctorStats = useMemo(() => {
@@ -372,7 +397,7 @@ const Accueil = () => {
       }
 
       // Open SMS app for satisfaction feedback
-      const satisfactionMessage = `Bonjour ${clientName}, avez-vous aimé votre traitement "${treatment}" chez PasseVite ?\n\nLaissez-nous votre avis ici : https://passevite.vercel.app/review?phone=${selectedEntry!.phone}`;
+      const satisfactionMessage = `Bonjour ${clientName}, avez-vous aimé votre traitement "${treatment}" à la clinique DermaDoc ?\n\nLaissez-nous votre avis ici : https://passevite-dermadoc.vercel.app/review?phone=${selectedEntry!.phone}`;
 
       // Handle iOS/Android URI differences
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
@@ -389,6 +414,18 @@ const Accueil = () => {
 
       // Attempt automatic redirect
       window.location.href = smsLink;
+
+      // Persist new treatment for suggestions if it's not already present
+      try {
+        const trimmed = treatment.trim();
+        if (trimmed && !treatmentsList.find(t => t.toLowerCase() === trimmed.toLowerCase())) {
+          const newList = [trimmed, ...treatmentsList];
+          setTreatmentsList(newList);
+          try { localStorage.setItem('pv_treatments', JSON.stringify(newList)); } catch (e) { /* ignore */ }
+        }
+      } catch (err) {
+        // ignore
+      }
 
       setShowCompleteModal(false);
     }
@@ -517,6 +554,26 @@ const Accueil = () => {
           <p className="text-[10px] text-muted-foreground truncate uppercase">le soin qui passe</p>
         </div>
         <div className="flex gap-1.5 sm:gap-2 mx-auto">
+          <Button onClick={async () => {
+            try {
+              setLoadingTodayClients(true);
+              const start = new Date(); start.setHours(0,0,0,0);
+              const end = new Date(); end.setHours(23,59,59,999);
+              const { data } = await supabase
+                .from('completed_clients')
+                .select('*, doctor:doctors(name)')
+                .gte('completed_at', start.toISOString())
+                .lte('completed_at', end.toISOString())
+                .order('completed_at', { ascending: false });
+              setTodayClients(data || []);
+            } catch (err) {
+              console.error('Error fetching today clients', err);
+              setTodayClients([]);
+            } finally {
+              setLoadingTodayClients(false);
+              setShowTodayModal(true);
+            }
+          }} variant="outline" size="sm" className="h-8 px-2 sm:px-3 text-[11px] font-black uppercase">Terminer</Button>
           <Button asChild variant="secondary" size="sm" className="h-8 px-2 sm:px-3 text-[11px] font-black uppercase tracking-widest bg-primary/10 text-primary hover:bg-primary/20 border-0 rounded-full sm:rounded-md shadow-none">
             <Link to="/accueil/factures/ajouter">
               <ShoppingCart className="h-3.5 w-3.5 sm:mr-1.5" />
@@ -574,6 +631,48 @@ const Accueil = () => {
           <Button variant="ghost" size="icon" onClick={signOut} className="h-8 w-8"><LogOut className="h-4 w-4" /></Button>
         </div>
       </header>
+
+      {/* Today's completed clients modal (Terminer) */}
+      <Dialog open={showTodayModal} onOpenChange={setShowTodayModal}>
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Clients traités aujourd'hui</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            {loadingTodayClients ? (
+              <div className="flex items-center justify-center p-6">
+                <div className="w-8 h-8 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+              </div>
+            ) : todayClients.length === 0 ? (
+              <div className="p-6 text-center text-muted-foreground">Aucun client traité aujourd'hui.</div>
+            ) : (
+              <div className="space-y-2">
+                {todayClients.map((c: any) => (
+                  <Card key={c.id} className="border-0 shadow-sm">
+                    <CardContent className="p-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-bold text-foreground">{c.client_name}</div>
+                          <div className="text-xs text-muted-foreground">{c.phone} · {c.doctor?.name || '—'}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-semibold">{(c.total_amount || 0).toLocaleString()} DZD</div>
+                          <div className="text-xs text-muted-foreground">Payé: {(c.tranche_paid || 0).toLocaleString()} DZD</div>
+                        </div>
+                      </div>
+                      <div className="mt-2 text-sm text-muted-foreground">Traitement: {c.treatment}</div>
+                      {c.notes && <div className="mt-1 text-xs text-muted-foreground">Note: {c.notes}</div>}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setShowTodayModal(false)} className="w-full">Fermer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
 
       {/* Stats by Doctor - carousel with navigation */}
@@ -797,14 +896,40 @@ const Accueil = () => {
               onChange={(e) => setClientName(e.target.value)}
               className="h-11 sm:h-12"
             />
-            <Select value={treatment} onValueChange={setTreatment}>
-              <SelectTrigger className="h-11 sm:h-12"><SelectValue placeholder="Traitement" /></SelectTrigger>
-              <SelectContent>
-                {TREATMENTS.map(t => (
-                  <SelectItem key={t} value={t}>{t}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="relative">
+              <Input
+                placeholder="Traitement"
+                value={treatment}
+                onChange={(e) => {
+                  setTreatment(e.target.value);
+                  setShowTreatmentSuggestions(true);
+                }}
+                onFocus={() => setShowTreatmentSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowTreatmentSuggestions(false), 150)}
+                className="h-11 sm:h-12"
+              />
+              {showTreatmentSuggestions && (
+                <div className="absolute left-0 right-0 mt-1 bg-card border rounded-lg overflow-hidden shadow-lg max-h-40 overflow-auto z-50">
+                  {treatmentsList
+                    .filter(t => {
+                      const q = treatment.trim().toLowerCase();
+                      if (!q) return false;
+                      return t.toLowerCase().includes(q);
+                    })
+                    .slice(0, 8)
+                    .map(s => (
+                      <button
+                        key={s}
+                        type="button"
+                        onMouseDown={(e) => { e.preventDefault(); setTreatment(s); setShowTreatmentSuggestions(false); }}
+                        className="w-full text-left px-3 py-2 hover:bg-secondary/50"
+                      >
+                        {s}
+                      </button>
+                    ))}
+                </div>
+              )}
+            </div>
             <Input
               placeholder="Montant total (DZD)"
               value={totalAmount}

@@ -318,8 +318,16 @@ const Rendezvous = () => {
     };
 
     const handleSendSMS = (phone: string, name: string, time: string) => {
-        const message = `We are PasseVite clinic. Your rendezvous with our equipe is in 24H. Please confirm if you will attend.`;
+        const message = `Clinique DermaDoc : votre rendez-vous avec notre équipe est dans 24h. Merci de confirmer votre présence.`;
         window.open(`sms:${phone}?body=${encodeURIComponent(message)}`, '_blank');
+    };
+
+    const handleSendWhatsApp = (phone: string, name: string, time: string) => {
+        const message = `Clinique DermaDoc : votre rendez-vous avec notre équipe est dans 24h. Merci de confirmer votre présence.`;
+        // Normalize phone to digits only for wa.me; leave as-is if empty
+        const digits = (phone || '').replace(/\D/g, '');
+        const waUrl = `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
+        window.open(waUrl, '_blank');
     };
 
     const handleCall = (phone: string) => {
@@ -503,6 +511,16 @@ const Rendezvous = () => {
                                                 >
                                                     <MessageSquare className="h-4 w-4" />
                                                     <span className="text-sm">SMS</span>
+                                                </Button>
+                                                <Button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleSendWhatsApp(appt.client_phone, appt.client_name, format(parseISO(appt.appointment_at), 'HH:mm'));
+                                                    }}
+                                                    variant="secondary" className="flex-1 sm:flex-none h-10 gap-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-400"
+                                                >
+                                                    <MessageSquare className="h-4 w-4" />
+                                                    <span className="text-sm">WhatsApp</span>
                                                 </Button>
                                                 <Button
                                                     onClick={(e) => {

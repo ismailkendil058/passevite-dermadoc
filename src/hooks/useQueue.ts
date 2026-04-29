@@ -113,7 +113,23 @@ export function useQueue() {
         fetchActiveSession()
       ]);
 
-      if (docRes.data) setDoctors(docRes.data);
+      // If no doctors exist in DB, seed default teams
+      if (!docRes.data || docRes.data.length === 0) {
+        try {
+          const defaultDoctors = [
+            { name: 'Djihane', initial: 'D' },
+            { name: 'Zineb', initial: 'Z' },
+            { name: 'Imane', initial: 'I' },
+          ];
+          const insertRes = await supabase.from('doctors').insert(defaultDoctors).select('*');
+          if (insertRes.data) setDoctors(insertRes.data as Doctor[]);
+        } catch (err) {
+          // fallback: keep empty
+          if (docRes.data) setDoctors(docRes.data);
+        }
+      } else {
+        setDoctors(docRes.data);
+      }
 
       if (session) {
         await Promise.all([
