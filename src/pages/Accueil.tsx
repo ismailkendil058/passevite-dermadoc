@@ -175,6 +175,8 @@ const Accueil = () => {
   const [tranchePaid, setTranchePaid] = useState('');
   const [totalPaidPreviously, setTotalPaidPreviously] = useState(0);
   const [completeNotes, setCompleteNotes] = useState('');
+  const [historyTreatments, setHistoryTreatments] = useState<Array<{ treatment: string; totalAmount: number; totalPaid: number }>>([]);
+  const [selectedHistoryTreatment, setSelectedHistoryTreatment] = useState<string | null>(null);
 
   const [hasNextAppt, setHasNextAppt] = useState(false);
   const [nextApptDate, setNextApptDate] = useState<Date | undefined>(undefined);
@@ -324,33 +326,75 @@ const Accueil = () => {
 
     // Fetch history for pre-filling
     try {
-      const { data: history } = await (await import('@/integrations/supabase/client')).supabase
-        .from('completed_clients')
-        .select('*')
-        .eq('phone', entry.phone)
-        .order('completed_at', { ascending: false });
+      // Only load previous treatments when this entry is a Rendez-vous (R).
+      if (entry.state === 'R') {
+        const { data: history } = await (await import('@/integrations/supabase/client')).supabase
+          .from('completed_clients')
+          .select('*')
+          .eq('phone', entry.phone)
+          .order('completed_at', { ascending: false });
 
-      if (history && history.length > 0) {
-        const lastVisit = history[0];
-        const totalPrevious = history.reduce((sum, item) => sum + (item.tranche_paid || 0), 0);
+        if (history && history.length > 0) {
+          // Aggregate history per treatment: sum paid tranches and keep latest total_amount for that treatment
+          const map = new Map<string, { totalPaid: number; totalAmount: number; lastDate: number }>();
+          history.forEach((item: any) => {
+            const key = item.treatment || '—';
+            const existing = map.get(key) || { totalPaid: 0, totalAmount: 0, lastDate: 0 };
+            existing.totalPaid += (item.tranche_paid || 0);
+            const ts = new Date(item.completed_at).getTime();
+            if (!existing.lastDate || ts > existing.lastDate) {
+              existing.totalAmount = item.total_amount || 0;
+              existing.lastDate = ts;
+            }
+            map.set(key, existing);
+          });
 
-        setTreatment(lastVisit.treatment);
-        setTotalAmount(lastVisit.total_amount?.toString() || '');
-        setTotalPaidPreviously(totalPrevious);
-        // Reset current payment for new visit
-        setTranchePaid('');
+          const treatmentsArr = Array.from(map.entries()).map(([treatment, v]) => ({
+            treatment,
+            totalAmount: v.totalAmount || 0,
+            totalPaid: v.totalPaid || 0,
+          }));
+
+          setHistoryTreatments(treatmentsArr);
+          // Prefill with the most recent treatment if available
+          const first = treatmentsArr[0];
+          if (first) {
+            setTreatment(first.treatment);
+            setTotalAmount(first.totalAmount?.toString() || '');
+            setTotalPaidPreviously(first.totalPaid || 0);
+            setSelectedHistoryTreatment(first.treatment);
+          } else {
+            setTreatment('');
+            setTotalAmount('');
+            setTotalPaidPreviously(0);
+            setSelectedHistoryTreatment(null);
+          }
+          setTranchePaid('');
+        } else {
+          setHistoryTreatments([]);
+          setTreatment('');
+          setTotalAmount('');
+          setTotalPaidPreviously(0);
+          setTranchePaid('');
+          setSelectedHistoryTreatment(null);
+        }
       } else {
+        // New patient: do not show or prefill any previous totals
+        setHistoryTreatments([]);
         setTreatment('');
         setTotalAmount('');
         setTotalPaidPreviously(0);
         setTranchePaid('');
+        setSelectedHistoryTreatment(null);
       }
     } catch (err) {
       console.error('Error fetching history:', err);
+      setHistoryTreatments([]);
       setTreatment('');
       setTotalAmount('');
       setTotalPaidPreviously(0);
       setTranchePaid('');
+      setSelectedHistoryTreatment(null);
     }
 
     setCompleteNotes('');
@@ -937,11 +981,36 @@ const Accueil = () => {
               type="number"
               className="h-11 sm:h-12"
             />
-            {totalPaidPreviously > 0 && (
-              <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100 flex justify-between items-center">
-                <span className="text-xs font-medium text-emerald-800">Déjà payé (total history):</span>
-                <span className="text-sm font-bold text-emerald-700">{totalPaidPreviously.toLocaleString()} DZD</span>
+            {historyTreatments.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">Historique des traitements :</p>
+                <div className="flex flex-col gap-2">
+                  {historyTreatments.map(ht => (
+                    <Button
+                      key={ht.treatment}
+                      variant={selectedHistoryTreatment === ht.treatment ? 'secondary' : 'outline'}
+                      size="sm"
+                      className="justify-between"
+                      onClick={() => {
+                        setSelectedHistoryTreatment(ht.treatment);
+                        setTreatment(ht.treatment);
+                        setTotalAmount(ht.totalAmount?.toString() || '');
+                        setTotalPaidPreviously(ht.totalPaid || 0);
+                      }}
+                    >
+                      <span className="truncate">{ht.treatment}</span>
+                      <span className="text-xs">{(ht.totalPaid || 0).toLocaleString()} / {(ht.totalAmount || 0).toLocaleString()} DZD</span>
+                    </Button>
+                  ))}
+                </div>
               </div>
+            ) : (
+              totalPaidPreviously > 0 && (
+                <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100 flex justify-between items-center">
+                  <span className="text-xs font-medium text-emerald-800">Déjà payé (total history):</span>
+                  <span className="text-sm font-bold text-emerald-700">{totalPaidPreviously.toLocaleString()} DZD</span>
+                </div>
+              )
             )}
             <Input
               placeholder="Tranche payée aujourd'hui (DZD)"
