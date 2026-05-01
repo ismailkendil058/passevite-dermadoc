@@ -148,6 +148,10 @@ const Accueil = () => {
   const [expenseAmount, setExpenseAmount] = useState('');
   const [expenseDesc, setExpenseDesc] = useState('');
   const [savingExpense, setSavingExpense] = useState(false);
+  // Channel Choice Modal
+  const [showChannelChoice, setShowChannelChoice] = useState(false);
+  const [lastCompletedPatient, setLastCompletedPatient] = useState<{ name: string; phone: string; treatment: string } | null>(null);
+
   const doctorsScrollRef = useRef<HTMLDivElement>(null);
 
   const scrollDoctors = (direction: 'left' | 'right') => {
@@ -440,24 +444,19 @@ const Accueil = () => {
         toast.success('Rendez-vous programmé');
       }
 
-      // Open SMS app for satisfaction feedback
-      const satisfactionMessage = `Bonjour ${clientName}, avez-vous aimé votre traitement "${treatment}" à la clinique DermaDoc ?\n\nLaissez-nous votre avis ici : https://passevite-dermadoc.vercel.app/review?phone=${selectedEntry!.phone}`;
 
-      // Handle iOS/Android URI differences
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-      const smsLink = `sms:${selectedEntry!.phone}${isIOS ? '&' : '?'}body=${encodeURIComponent(satisfactionMessage)}`;
-
-      toast.success('Patient traité avec succès', {
-        description: "Ouverture de l'application SMS pour le questionnaire...",
-        duration: 5000,
-        action: {
-          label: "Envoyer SMS",
-          onClick: () => { window.location.href = smsLink; }
-        }
+      // Prepare data for the choice modal
+      setLastCompletedPatient({
+        name: clientName,
+        phone: selectedEntry!.phone,
+        treatment: treatment
       });
 
-      // Attempt automatic redirect
-      window.location.href = smsLink;
+      toast.success('Patient traité avec succès');
+
+      // Show choice modal instead of direct redirect
+      setShowCompleteModal(false);
+      setShowChannelChoice(true);
 
       // Persist new treatment for suggestions if it's not already present
       try {
@@ -933,155 +932,155 @@ const Accueil = () => {
 
       {/* Complete Client Modal */}
       <Dialog open={showCompleteModal} onOpenChange={setShowCompleteModal}>
-        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[calc(100vh-4rem)] overflow-hidden">
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Finaliser · {selectedEntry?.client_id}</DialogTitle>
           </DialogHeader>
           <div className="relative">
-            <div className="max-h-[calc(100vh-28rem)] overflow-y-auto space-y-3 sm:space-y-4 pr-2 pb-2">
+            <div className="space-y-3 sm:space-y-4 pb-2">
               <Input
                 placeholder="Nom du client"
-              value={clientName}
-              onChange={(e) => setClientName(e.target.value)}
-              className="h-11 sm:h-12"
-            />
-            <div className="relative">
-              <Input
-                placeholder="Traitement"
-                value={treatment}
-                onChange={(e) => {
-                  setTreatment(e.target.value);
-                  setShowTreatmentSuggestions(true);
-                }}
-                onFocus={() => setShowTreatmentSuggestions(true)}
-                onBlur={() => setTimeout(() => setShowTreatmentSuggestions(false), 150)}
+                value={clientName}
+                onChange={(e) => setClientName(e.target.value)}
                 className="h-11 sm:h-12"
               />
-              {showTreatmentSuggestions && (
-                <div className="absolute left-0 right-0 mt-1 bg-card border rounded-lg overflow-hidden shadow-lg max-h-40 overflow-auto z-50">
-                  {treatmentsList
-                    .filter(t => {
-                      const q = treatment.trim().toLowerCase();
-                      if (!q) return false;
-                      return t.toLowerCase().includes(q);
-                    })
-                    .slice(0, 8)
-                    .map(s => (
-                      <button
-                        key={s}
-                        type="button"
-                        onMouseDown={(e) => { e.preventDefault(); setTreatment(s); setShowTreatmentSuggestions(false); }}
-                        className="w-full text-left px-3 py-2 hover:bg-secondary/50"
+              <div className="relative">
+                <Input
+                  placeholder="Traitement"
+                  value={treatment}
+                  onChange={(e) => {
+                    setTreatment(e.target.value);
+                    setShowTreatmentSuggestions(true);
+                  }}
+                  onFocus={() => setShowTreatmentSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowTreatmentSuggestions(false), 150)}
+                  className="h-11 sm:h-12"
+                />
+                {showTreatmentSuggestions && (
+                  <div className="absolute left-0 right-0 mt-1 bg-card border rounded-lg overflow-hidden shadow-lg max-h-40 overflow-auto z-50">
+                    {treatmentsList
+                      .filter(t => {
+                        const q = treatment.trim().toLowerCase();
+                        if (!q) return false;
+                        return t.toLowerCase().includes(q);
+                      })
+                      .slice(0, 8)
+                      .map(s => (
+                        <button
+                          key={s}
+                          type="button"
+                          onMouseDown={(e) => { e.preventDefault(); setTreatment(s); setShowTreatmentSuggestions(false); }}
+                          className="w-full text-left px-3 py-2 hover:bg-secondary/50"
+                        >
+                          {s}
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </div>
+              <Input
+                placeholder="Montant total (DZD)"
+                value={totalAmount}
+                onChange={(e) => setTotalAmount(e.target.value)}
+                type="number"
+                className="h-11 sm:h-12"
+              />
+              {historyTreatments.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">Historique des traitements :</p>
+                  <div className="flex flex-col gap-2">
+                    {historyTreatments.map(ht => (
+                      <Button
+                        key={ht.treatment}
+                        variant={selectedHistoryTreatment === ht.treatment ? 'secondary' : 'outline'}
+                        size="sm"
+                        className="justify-between"
+                        onClick={() => {
+                          setSelectedHistoryTreatment(ht.treatment);
+                          setTreatment(ht.treatment);
+                          setTotalAmount(ht.totalAmount?.toString() || '');
+                          setTotalPaidPreviously(ht.totalPaid || 0);
+                        }}
                       >
-                        {s}
-                      </button>
+                        <span className="truncate">{ht.treatment}</span>
+                        <span className="text-xs">{(ht.totalPaid || 0).toLocaleString()} / {(ht.totalAmount || 0).toLocaleString()} DZD</span>
+                      </Button>
                     ))}
+                  </div>
+                </div>
+              ) : (
+                totalPaidPreviously > 0 && (
+                  <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100 flex justify-between items-center">
+                    <span className="text-xs font-medium text-emerald-800">Déjà payé (total history):</span>
+                    <span className="text-sm font-bold text-emerald-700">{totalPaidPreviously.toLocaleString()} DZD</span>
+                  </div>
+                )
+              )}
+              <Input
+                placeholder="Tranche payée aujourd'hui (DZD)"
+                value={tranchePaid}
+                onChange={(e) => setTranchePaid(e.target.value)}
+                type="number"
+                className="h-11 sm:h-12"
+              />
+              <div className="grid grid-cols-1 gap-4">
+                <Input
+                  placeholder="Note (optionnelle)"
+                  value={completeNotes}
+                  onChange={(e) => setCompleteNotes(e.target.value)}
+                  className="h-11 sm:h-12"
+                />
+              </div>
+
+              <div className="flex items-center space-x-2 py-2">
+                <Checkbox
+                  id="next-appt"
+                  checked={hasNextAppt}
+                  onCheckedChange={(checked) => setHasNextAppt(checked === true)}
+                />
+                <label
+                  htmlFor="next-appt"
+                  className="text-sm font-bold leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                >
+                  Prendre un rendez-vous ?
+                </label>
+              </div>
+
+              {hasNextAppt && (
+                <div className="space-y-3 p-3 bg-secondary/30 rounded-lg animate-in fade-in slide-in-from-top-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase text-muted-foreground">Date</label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" className="w-full justify-start text-left font-normal h-10 px-3">
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {nextApptDate ? format(nextApptDate, 'dd/MM/yy', { locale: fr }) : <span>Choisir...</span>}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar mode="single" selected={nextApptDate} onSelect={setNextApptDate} locale={fr} initialFocus />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase text-muted-foreground">Heure</label>
+                      <Input type="time" value={nextApptTime} onChange={(e) => setNextApptTime(e.target.value)} className="h-10" />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase text-muted-foreground">Equipe</label>
+                    <Select value={nextApptDoctorId} onValueChange={setNextApptDoctorId}>
+                      <SelectTrigger className="h-10"><SelectValue placeholder="Equipe" /></SelectTrigger>
+                      <SelectContent>
+                        {doctors.map(d => (
+                          <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               )}
-            </div>
-            <Input
-              placeholder="Montant total (DZD)"
-              value={totalAmount}
-              onChange={(e) => setTotalAmount(e.target.value)}
-              type="number"
-              className="h-11 sm:h-12"
-            />
-            {historyTreatments.length > 0 ? (
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground">Historique des traitements :</p>
-                <div className="flex flex-col gap-2">
-                  {historyTreatments.map(ht => (
-                    <Button
-                      key={ht.treatment}
-                      variant={selectedHistoryTreatment === ht.treatment ? 'secondary' : 'outline'}
-                      size="sm"
-                      className="justify-between"
-                      onClick={() => {
-                        setSelectedHistoryTreatment(ht.treatment);
-                        setTreatment(ht.treatment);
-                        setTotalAmount(ht.totalAmount?.toString() || '');
-                        setTotalPaidPreviously(ht.totalPaid || 0);
-                      }}
-                    >
-                      <span className="truncate">{ht.treatment}</span>
-                      <span className="text-xs">{(ht.totalPaid || 0).toLocaleString()} / {(ht.totalAmount || 0).toLocaleString()} DZD</span>
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              totalPaidPreviously > 0 && (
-                <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100 flex justify-between items-center">
-                  <span className="text-xs font-medium text-emerald-800">Déjà payé (total history):</span>
-                  <span className="text-sm font-bold text-emerald-700">{totalPaidPreviously.toLocaleString()} DZD</span>
-                </div>
-              )
-            )}
-            <Input
-              placeholder="Tranche payée aujourd'hui (DZD)"
-              value={tranchePaid}
-              onChange={(e) => setTranchePaid(e.target.value)}
-              type="number"
-              className="h-11 sm:h-12"
-            />
-            <div className="grid grid-cols-1 gap-4">
-              <Input
-                placeholder="Note (optionnelle)"
-                value={completeNotes}
-                onChange={(e) => setCompleteNotes(e.target.value)}
-                className="h-11 sm:h-12"
-              />
-            </div>
-
-            <div className="flex items-center space-x-2 py-2">
-              <Checkbox
-                id="next-appt"
-                checked={hasNextAppt}
-                onCheckedChange={(checked) => setHasNextAppt(checked === true)}
-              />
-              <label
-                htmlFor="next-appt"
-                className="text-sm font-bold leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-              >
-                Prendre un rendez-vous ?
-              </label>
-            </div>
-
-            {hasNextAppt && (
-              <div className="space-y-3 p-3 bg-secondary/30 rounded-lg animate-in fade-in slide-in-from-top-2">
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase text-muted-foreground">Date</label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" className="w-full justify-start text-left font-normal h-10 px-3">
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {nextApptDate ? format(nextApptDate, 'dd/MM/yy', { locale: fr }) : <span>Choisir...</span>}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar mode="single" selected={nextApptDate} onSelect={setNextApptDate} locale={fr} initialFocus />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase text-muted-foreground">Heure</label>
-                    <Input type="time" value={nextApptTime} onChange={(e) => setNextApptTime(e.target.value)} className="h-10" />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase text-muted-foreground">Equipe</label>
-                  <Select value={nextApptDoctorId} onValueChange={setNextApptDoctorId}>
-                    <SelectTrigger className="h-10"><SelectValue placeholder="Equipe" /></SelectTrigger>
-                    <SelectContent>
-                      {doctors.map(d => (
-                        <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            )}
 
             </div>
           </div>
@@ -1169,6 +1168,69 @@ const Accueil = () => {
               {savingExpense ? "Enregistrement..." : "Confirmer la dépense"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Channel Choice Modal */}
+      <Dialog open={showChannelChoice} onOpenChange={setShowChannelChoice}>
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-sm p-0 overflow-hidden border-0 shadow-2xl rounded-3xl">
+          <div className="bg-gradient-to-br from-primary/5 to-primary/10 p-8 text-center space-y-4">
+            <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mx-auto mb-2">
+              <MessageCircle className="h-8 w-8 text-primary" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-xl font-bold text-foreground">Envoyer l'Avis ?</h3>
+              <p className="text-sm text-muted-foreground px-4">
+                Comment souhaitez-vous envoyer le questionnaire de satisfaction à <span className="font-bold text-primary">{lastCompletedPatient?.name}</span> ?
+              </p>
+            </div>
+          </div>
+
+          <div className="p-6 grid grid-cols-1 gap-3">
+            <Button
+              className="h-14 rounded-2xl bg-[#25D366] hover:bg-[#128C7E] text-white border-0 shadow-md font-bold text-md gap-3"
+              onClick={() => {
+                if (!lastCompletedPatient) return;
+                const msg = `Bonjour ${lastCompletedPatient.name}, avez-vous aimé votre traitement "${lastCompletedPatient.treatment}" à la clinique DermaDoc ?\n\nLaissez-nous votre avis ici : https://passevite-dermadoc.vercel.app/review?phone=${lastCompletedPatient.phone}`;
+                // Clean phone number (remove leading zero and add +213 for Algeria)
+                let cleanPhone = lastCompletedPatient.phone.replace(/\s+/g, '');
+                if (cleanPhone.startsWith('0')) cleanPhone = '213' + cleanPhone.substring(1);
+                else if (!cleanPhone.startsWith('213')) cleanPhone = '213' + cleanPhone;
+
+                window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+                setShowChannelChoice(false);
+              }}
+            >
+              <svg className="h-6 w-6 fill-current" viewBox="0 0 24 24">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+              </svg>
+              WhatsApp
+            </Button>
+
+            <Button
+              variant="outline"
+              className="h-14 rounded-2xl border-2 hover:bg-secondary/50 font-bold text-md gap-3"
+              onClick={() => {
+                if (!lastCompletedPatient) return;
+                const msg = `Bonjour ${lastCompletedPatient.name}, avez-vous aimé votre traitement "${lastCompletedPatient.treatment}" à la clinique DermaDoc ?\n\nLaissez-nous votre avis ici : https://passevite-dermadoc.vercel.app/review?phone=${lastCompletedPatient.phone}`;
+                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                const smsLink = `sms:${lastCompletedPatient.phone}${isIOS ? '&' : '?'}body=${encodeURIComponent(msg)}`;
+                window.location.href = smsLink;
+                setShowChannelChoice(false);
+              }}
+            >
+              <Phone className="h-6 w-6 text-primary" />
+              SMS Classique
+            </Button>
+
+            <Button
+              variant="ghost"
+              className="h-10 rounded-xl text-muted-foreground hover:text-foreground text-xs font-bold uppercase tracking-widest mt-2"
+              onClick={() => setShowChannelChoice(false)}
+            >
+              Plus tard
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
