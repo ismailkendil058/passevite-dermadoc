@@ -87,7 +87,9 @@ const Rendezvous = () => {
     const [editingVisit, setEditingVisit] = useState<CompletedClient | null>(null);
     const [isAddVisitOpen, setIsAddVisitOpen] = useState(false);
     const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-    const [newVisitData, setNewVisitData] = useState<Partial<CompletedClient>>({
+    const [showAddTreatment, setShowAddTreatment] = useState(false);
+    const [showAddAppt, setShowAddAppt] = useState(false);
+    const [newVisitData, setNewVisitData] = useState<Partial<CompletedClient & { apptDate: Date; apptTime: string; apptDoctor: string; apptNotes: string }>>({
         client_name: '',
         phone: '',
         treatment: '',
@@ -95,7 +97,11 @@ const Rendezvous = () => {
         tranche_paid: 0,
         doctor_id: '',
         notes: '',
-        state: 'N'
+        state: 'N',
+        apptDate: new Date(),
+        apptTime: '09:00',
+        apptDoctor: '',
+        apptNotes: ''
     });
 
     const fetchActiveSession = async () => {
@@ -133,45 +139,74 @@ const Rendezvous = () => {
         }
     };
 
-    const handleSaveVisit = async (visit: Partial<CompletedClient>) => {
-        if (!visit.client_name || !visit.phone || !visit.treatment || !visit.total_amount) {
-            toast.error('Veuillez remplir les champs obligatoires');
+    const handleSaveVisit = async (visit: Partial<CompletedClient & { apptDate?: Date; apptTime?: string; apptDoctor?: string; apptNotes?: string }>) => {
+        if (!visit.client_name || !visit.phone) {
+            toast.error('Le nom et le téléphone sont obligatoires');
             return;
         }
 
-        const dataToSave: any = {
-            client_name: visit.client_name,
-            phone: visit.phone,
-            treatment: visit.treatment,
-            total_amount: Number(visit.total_amount),
-            tranche_paid: Number(visit.tranche_paid || 0),
-            doctor_id: visit.doctor_id || null,
-            notes: visit.notes || null,
-            completed_at: visit.completed_at || new Date().toISOString(),
-            state: visit.state || 'N',
-            receptionist_id: user?.id,
-            session_id: activeSessionId,
-            client_id: visit.client_id || `ADM-${Date.now()}`
-        };
+        const isNewPatientOnly = !showAddTreatment && !showAddAppt && !editingVisit;
 
         try {
-            let error;
-            if (visit.id) {
-                const { error: err } = await supabase.from('completed_clients').update(dataToSave).eq('id', visit.id);
-                error = err;
-            } else {
-                const { error: err } = await supabase.from('completed_clients').insert(dataToSave);
-                error = err;
+            // 1. Handle Treatment (completed_clients)
+            if (showAddTreatment || editingVisit || isNewPatientOnly) {
+                const treatmentData: any = {
+                    client_name: visit.client_name,
+                    phone: visit.phone,
+                    treatment: showAddTreatment || editingVisit ? visit.treatment : 'Nouveau Patient',
+                    total_amount: Number(visit.total_amount || 0),
+                    tranche_paid: Number(visit.tranche_paid || 0),
+                    doctor_id: visit.doctor_id || null,
+                    notes: visit.notes || null,
+                    completed_at: visit.completed_at || new Date().toISOString(),
+                    state: visit.state || 'N',
+                    receptionist_id: user?.id,
+                    session_id: activeSessionId,
+                    client_id: visit.client_id || `ADM-${Date.now()}`
+                };
+
+                let error;
+                if (visit.id) {
+                    const { error: err } = await supabase.from('completed_clients').update(treatmentData).eq('id', visit.id);
+                    error = err;
+                } else {
+                    const { error: err } = await supabase.from('completed_clients').insert(treatmentData);
+                    error = err;
+                }
+
+                if (error) throw error;
             }
 
-            if (error) throw error;
+            // 2. Handle Appointment
+            if (showAddAppt && !visit.id) { // Only for new entries, not editing an existing visit
+                if (!visit.apptDate || !visit.apptDoctor) {
+                    toast.error('Veuillez remplir les détails du rendez-vous');
+                    return;
+                }
+
+                const [hours, minutes] = (visit.apptTime || '09:00').split(':');
+                const appointmentAt = new Date(visit.apptDate);
+                appointmentAt.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+
+                const appointmentData = {
+                    client_phone: visit.phone,
+                    client_name: visit.client_name,
+                    doctor_id: visit.apptDoctor,
+                    appointment_at: appointmentAt.toISOString(),
+                    notes: visit.apptNotes || '',
+                    status: 'scheduled'
+                };
+
+                const { error: apptErr } = await supabase.from('appointments').insert(appointmentData);
+                if (apptErr) throw apptErr;
+            }
 
             toast.success('Enregistré avec succès');
             setIsAddVisitOpen(false);
             setEditingVisit(null);
             fetchInitialData();
         } catch (error) {
-            console.error('Error saving visit:', error);
+            console.error('Error saving visit/appt:', error);
             toast.error('Erreur lors de l\'enregistrement');
         }
     };
@@ -483,7 +518,7 @@ const Rendezvous = () => {
             map.set(key, existing);
         });
 
-        const treatments = Array.from(map.entries()).map(([t, v]) => ({ treatment: t, entries: v.entries.sort((a,b) => new Date(b.completed_at).getTime() - new Date(a.completed_at).getTime()), totalPaid: v.totalPaid, latestTotal: v.latestTotal }));
+        const treatments = Array.from(map.entries()).map(([t, v]) => ({ treatment: t, entries: v.entries.sort((a, b) => new Date(b.completed_at).getTime() - new Date(a.completed_at).getTime()), totalPaid: v.totalPaid, latestTotal: v.latestTotal }));
 
         const apptsById = new Map<string, Appointment>();
         appointments.forEach(a => apptsById.set(a.id, a));
@@ -654,8 +689,14 @@ const Rendezvous = () => {
                                                 tranche_paid: 0,
                                                 doctor_id: '',
                                                 notes: '',
-                                                state: 'N'
+                                                state: 'N',
+                                                apptDate: new Date(),
+                                                apptTime: '09:00',
+                                                apptDoctor: '',
+                                                apptNotes: ''
                                             });
+                                            setShowAddTreatment(false);
+                                            setShowAddAppt(false);
                                             setIsAddVisitOpen(true);
                                         }}
                                     >
@@ -675,7 +716,7 @@ const Rendezvous = () => {
                                             <CardContent className="p-4 flex items-center justify-between">
                                                 <div className="space-y-1">
                                                     <p className="font-bold text-foreground group-hover:text-primary transition-colors">{patient.name}</p>
-                                                    <p className="text-xs text-muted-foreground">{patient.phone} · <span className="text-primary/70">{patient.treatments.map(t => t.treatment).slice(0,2).join(', ')}</span></p>
+                                                    <p className="text-xs text-muted-foreground">{patient.phone} · <span className="text-primary/70">{patient.treatments.map(t => t.treatment).slice(0, 2).join(', ')}</span></p>
                                                 </div>
                                                 <div className="flex items-center gap-3">
                                                     <div className="text-right hidden sm:block">
@@ -806,7 +847,7 @@ const Rendezvous = () => {
                                                             <CalendarIcon className="h-3.5 w-3.5" /> Historique des Rendez-vous
                                                         </h4>
                                                         <div className="space-y-2">
-                                                            {patientData.getApptsForTreatment(chosen || '') .length === 0 ? (
+                                                            {patientData.getApptsForTreatment(chosen || '').length === 0 ? (
                                                                 <p className="text-sm text-center py-4 bg-muted/20 rounded-xl text-muted-foreground">Aucun historique de rendez-vous</p>
                                                             ) : (
                                                                 patientData.getApptsForTreatment(chosen || '').map(a => (
@@ -829,96 +870,182 @@ const Rendezvous = () => {
                             </Dialog>
 
                             <Dialog open={isAddVisitOpen || !!editingVisit} onOpenChange={(open) => { if (!open) { setIsAddVisitOpen(false); setEditingVisit(null); } }}>
-                                <DialogContent className="max-w-md rounded-2xl">
-                                    <DialogHeader>
+                                <DialogContent className="max-w-md w-[95vw] rounded-2xl max-h-[85vh] flex flex-col p-0 overflow-hidden shadow-2xl">
+                                    <DialogHeader className="p-6 pb-4 shrink-0 border-b border-border/10 bg-white z-10">
                                         <DialogTitle className="text-xl font-bold italic text-primary">
                                             {editingVisit ? 'Modifier la Visite' : 'Ajouter un Patient / Visite'}
                                         </DialogTitle>
                                         <DialogDescription>Remplissez les détails médicaux et financiers du patient.</DialogDescription>
                                     </DialogHeader>
 
-                                    <div className="space-y-4 py-4">
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] uppercase font-black text-muted-foreground">Nom du Patient</label>
-                                            <Input
-                                                placeholder="Nom complet"
-                                                value={(editingVisit || newVisitData).client_name}
-                                                onChange={e => editingVisit ? setEditingVisit({ ...editingVisit, client_name: e.target.value }) : setNewVisitData({ ...newVisitData, client_name: e.target.value })}
-                                            />
+                                    <div className="flex-1 overflow-y-auto p-6 space-y-6 overscroll-contain">
+                                        <div className="space-y-4">
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] uppercase font-black text-muted-foreground">Nom du Patient</label>
+                                                <Input
+                                                    placeholder="Nom complet"
+                                                    value={(editingVisit || newVisitData).client_name}
+                                                    onChange={e => editingVisit ? setEditingVisit({ ...editingVisit, client_name: e.target.value }) : setNewVisitData({ ...newVisitData, client_name: e.target.value })}
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] uppercase font-black text-muted-foreground">Téléphone</label>
+                                                <Input
+                                                    placeholder="05XX XX XX XX"
+                                                    value={(editingVisit || newVisitData).phone}
+                                                    onChange={e => editingVisit ? setEditingVisit({ ...editingVisit, phone: e.target.value }) : setNewVisitData({ ...newVisitData, phone: e.target.value })}
+                                                />
+                                            </div>
                                         </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] uppercase font-black text-muted-foreground">Téléphone</label>
-                                            <Input
-                                                placeholder="05XX XX XX XX"
-                                                value={(editingVisit || newVisitData).phone}
-                                                onChange={e => editingVisit ? setEditingVisit({ ...editingVisit, phone: e.target.value }) : setNewVisitData({ ...newVisitData, phone: e.target.value })}
-                                            />
-                                        </div>
-                                        <div className="space-y-2 relative">
-                                            <label className="text-[10px] uppercase font-black text-muted-foreground">Traitement</label>
-                                            <Input
-                                                placeholder="Soin pratiqué"
-                                                value={(editingVisit || newVisitData).treatment}
-                                                onChange={e => editingVisit ? setEditingVisit({ ...editingVisit, treatment: e.target.value }) : setNewVisitData({ ...newVisitData, treatment: e.target.value })}
-                                            />
-                                            {((editingVisit || newVisitData).treatment && (editingVisit || newVisitData).treatment.length > 0) && (
-                                                <div className="flex flex-wrap gap-1.5 mt-2">
-                                                    {TREATMENTS.filter(t =>
-                                                        t.toLowerCase().includes(((editingVisit || newVisitData).treatment || '').toLowerCase()) &&
-                                                        t.toLowerCase() !== ((editingVisit || newVisitData).treatment || '').toLowerCase()
-                                                    ).slice(0, 5).map(suggestion => (
-                                                        <Button
-                                                            key={suggestion}
-                                                            variant="secondary"
-                                                            size="sm"
-                                                            className="h-7 text-[10px] px-2 bg-primary/5 hover:bg-primary/10 text-primary border-primary/10 font-bold uppercase tracking-tighter"
-                                                            onClick={() => editingVisit
-                                                                ? setEditingVisit({ ...editingVisit, treatment: suggestion })
-                                                                : setNewVisitData({ ...newVisitData, treatment: suggestion })
-                                                            }
-                                                        >
-                                                            {suggestion}
-                                                        </Button>
-                                                    ))}
+
+                                        {!editingVisit && (
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    variant={showAddTreatment ? "default" : "outline"}
+                                                    size="sm"
+                                                    className={`flex-1 rounded-xl h-10 gap-2 ${showAddTreatment ? 'bg-primary text-primary-foreground hover:bg-primary/90' : ''}`}
+                                                    onClick={() => setShowAddTreatment(!showAddTreatment)}
+                                                >
+                                                    <Plus className={`h-4 w-4 transition-transform ${showAddTreatment ? 'rotate-45' : ''}`} />
+                                                    Traitement
+                                                </Button>
+                                                <Button
+                                                    variant={showAddAppt ? "default" : "outline"}
+                                                    size="sm"
+                                                    className={`flex-1 rounded-xl h-10 gap-2 ${showAddAppt ? 'bg-blue-600 text-white hover:bg-blue-700' : ''}`}
+                                                    onClick={() => setShowAddAppt(!showAddAppt)}
+                                                >
+                                                    <CalendarIcon className="h-4 w-4" />
+                                                    Rendez-vous
+                                                </Button>
+                                            </div>
+                                        )}
+
+                                        {(showAddTreatment || editingVisit) && (
+                                            <div className="space-y-4 p-4 rounded-2xl bg-primary/[0.03] border border-primary/10 animate-in fade-in slide-in-from-top-2">
+                                                <h4 className="text-[10px] uppercase font-black text-primary tracking-widest flex items-center gap-2">
+                                                    <Plus className="h-3 w-3" /> Détails du Traitement
+                                                </h4>
+                                                <div className="space-y-2 relative">
+                                                    <label className="text-[10px] uppercase font-black text-muted-foreground">Traitement</label>
+                                                    <Input
+                                                        placeholder="Soin pratiqué"
+                                                        value={(editingVisit || newVisitData).treatment}
+                                                        onChange={e => editingVisit ? setEditingVisit({ ...editingVisit, treatment: e.target.value }) : setNewVisitData({ ...newVisitData, treatment: e.target.value })}
+                                                    />
+                                                    {((editingVisit || newVisitData).treatment && (editingVisit || newVisitData).treatment.length > 0) && (
+                                                        <div className="flex flex-wrap gap-1.5 mt-2">
+                                                            {TREATMENTS.filter(t =>
+                                                                t.toLowerCase().includes(((editingVisit || newVisitData).treatment || '').toLowerCase()) &&
+                                                                t.toLowerCase() !== ((editingVisit || newVisitData).treatment || '').toLowerCase()
+                                                            ).slice(0, 5).map(suggestion => (
+                                                                <Button
+                                                                    key={suggestion}
+                                                                    variant="secondary"
+                                                                    size="sm"
+                                                                    className="h-7 text-[10px] px-2 bg-primary/5 hover:bg-primary/10 text-primary border-primary/10 font-bold uppercase tracking-tighter"
+                                                                    onClick={() => editingVisit
+                                                                        ? setEditingVisit({ ...editingVisit, treatment: suggestion })
+                                                                        : setNewVisitData({ ...newVisitData, treatment: suggestion })
+                                                                    }
+                                                                >
+                                                                    {suggestion}
+                                                                </Button>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            )}
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] uppercase font-black text-muted-foreground">Prix Total (DZD)</label>
-                                                <Input
-                                                    type="number"
-                                                    value={(editingVisit || newVisitData).total_amount}
-                                                    onChange={e => editingVisit ? setEditingVisit({ ...editingVisit, total_amount: Number(e.target.value) }) : setNewVisitData({ ...newVisitData, total_amount: Number(e.target.value) })}
-                                                />
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="space-y-2">
+                                                        <label className="text-[10px] uppercase font-black text-muted-foreground">Prix Total</label>
+                                                        <Input
+                                                            type="number"
+                                                            value={(editingVisit || newVisitData).total_amount}
+                                                            onChange={e => editingVisit ? setEditingVisit({ ...editingVisit, total_amount: Number(e.target.value) }) : setNewVisitData({ ...newVisitData, total_amount: Number(e.target.value) })}
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <label className="text-[10px] uppercase font-black text-muted-foreground">Versé</label>
+                                                        <Input
+                                                            type="number"
+                                                            value={(editingVisit || newVisitData).tranche_paid}
+                                                            onChange={e => editingVisit ? setEditingVisit({ ...editingVisit, tranche_paid: Number(e.target.value) }) : setNewVisitData({ ...newVisitData, tranche_paid: Number(e.target.value) })}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] uppercase font-black text-muted-foreground">Médecin</label>
+                                                    <Select
+                                                        value={(editingVisit || newVisitData).doctor_id}
+                                                        onValueChange={val => editingVisit ? setEditingVisit({ ...editingVisit, doctor_id: val }) : setNewVisitData({ ...newVisitData, doctor_id: val })}
+                                                    >
+                                                        <SelectTrigger className="rounded-xl h-11">
+                                                            <SelectValue placeholder="Choisir un médecin" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {doctors.map(d => (
+                                                                <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
                                             </div>
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] uppercase font-black text-muted-foreground">Versé (DZD)</label>
-                                                <Input
-                                                    type="number"
-                                                    value={(editingVisit || newVisitData).tranche_paid}
-                                                    onChange={e => editingVisit ? setEditingVisit({ ...editingVisit, tranche_paid: Number(e.target.value) }) : setNewVisitData({ ...newVisitData, tranche_paid: Number(e.target.value) })}
-                                                />
+                                        )}
+
+                                        {showAddAppt && !editingVisit && (
+                                            <div className="space-y-4 p-4 rounded-2xl bg-blue-50/50 border border-blue-100 animate-in fade-in slide-in-from-top-2">
+                                                <h4 className="text-[10px] uppercase font-black text-blue-600 tracking-widest flex items-center gap-2">
+                                                    <CalendarIcon className="h-3 w-3" /> Détails du Rendez-vous
+                                                </h4>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="space-y-2">
+                                                        <label className="text-[10px] uppercase font-black text-muted-foreground">Date</label>
+                                                        <Dialog>
+                                                            <DialogTrigger asChild>
+                                                                <Button variant="outline" className="w-full justify-start text-left font-normal h-11 rounded-xl px-3 text-xs">
+                                                                    {newVisitData.apptDate ? format(newVisitData.apptDate, 'dd/MM/yy', { locale: fr }) : <span>Date...</span>}
+                                                                </Button>
+                                                            </DialogTrigger>
+                                                            <DialogContent className="p-0 border-none shadow-none max-w-fit">
+                                                                <Calendar mode="single" selected={newVisitData.apptDate} onSelect={(d) => setNewVisitData({ ...newVisitData, apptDate: d || new Date() })} locale={fr} />
+                                                            </DialogContent>
+                                                        </Dialog>
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <label className="text-[10px] uppercase font-black text-muted-foreground">Heure</label>
+                                                        <Input type="time" value={newVisitData.apptTime} onChange={e => setNewVisitData({ ...newVisitData, apptTime: e.target.value })} className="h-11 rounded-xl text-xs px-3" />
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] uppercase font-black text-muted-foreground">Equipe</label>
+                                                    <Select
+                                                        value={newVisitData.apptDoctor}
+                                                        onValueChange={val => setNewVisitData({ ...newVisitData, apptDoctor: val })}
+                                                    >
+                                                        <SelectTrigger className="rounded-xl h-11 px-3 text-xs">
+                                                            <SelectValue placeholder="Choisir l'équipe" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {doctors.map(d => (
+                                                                <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] uppercase font-black text-muted-foreground">Notes RDV</label>
+                                                    <Input
+                                                        placeholder="Motif..."
+                                                        value={newVisitData.apptNotes}
+                                                        onChange={e => setNewVisitData({ ...newVisitData, apptNotes: e.target.value })}
+                                                        className="h-11 rounded-xl px-3 text-xs"
+                                                    />
+                                                </div>
                                             </div>
-                                        </div>
+                                        )}
+
                                         <div className="space-y-2">
-                                            <label className="text-[10px] uppercase font-black text-muted-foreground">Equipe / Médecin</label>
-                                            <Select
-                                                value={(editingVisit || newVisitData).doctor_id}
-                                                onValueChange={val => editingVisit ? setEditingVisit({ ...editingVisit, doctor_id: val }) : setNewVisitData({ ...newVisitData, doctor_id: val })}
-                                            >
-                                                <SelectTrigger className="rounded-xl">
-                                                    <SelectValue placeholder="Choisir un médecin" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {doctors.map(d => (
-                                                        <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] uppercase font-black text-muted-foreground">Notes</label>
+                                            <label className="text-[10px] uppercase font-black text-muted-foreground">Notes Générales</label>
                                             <Input
                                                 placeholder="Notes facultatives..."
                                                 value={(editingVisit || newVisitData).notes || ''}
@@ -926,9 +1053,10 @@ const Rendezvous = () => {
                                             />
                                         </div>
                                     </div>
-                                    <DialogFooter>
+
+                                    <DialogFooter className="p-6 pt-4 shrink-0 border-t border-border/10 bg-white z-10">
                                         <Button
-                                            className="w-full h-12 rounded-xl"
+                                            className="w-full h-12 rounded-xl text-md font-bold shadow-premium"
                                             onClick={() => handleSaveVisit(editingVisit || newVisitData)}
                                         >
                                             Enregistrer
