@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -14,7 +15,9 @@ import {
     Filter,
     ArrowLeft,
     Sparkles,
+    Trash2,
 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { format, parseISO, isToday } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -41,11 +44,13 @@ interface Appointment {
 
 const Appointment = () => {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [filterStatus, setFilterStatus] = useState<string>('all');
     const [isSearchOpen, setIsSearchOpen] = useState(false);
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
     const fetchData = async () => {
         setLoading(true);
@@ -102,6 +107,57 @@ const Appointment = () => {
         }
     };
 
+    const handleDeleteSingle = async (id: string) => {
+        if (!window.confirm('Supprimer ce rendez-vous ?')) return;
+        try {
+            const { error } = await (supabase as any)
+                .from('website')
+                .delete()
+                .eq('id', id);
+            if (error) throw error;
+            toast.success('Rendez-vous supprimé');
+            fetchData();
+        } catch (error) {
+            console.error('Error deleting:', error);
+            toast.error('Erreur lors de la suppression');
+        }
+    };
+
+    const handleDeleteMultiple = async () => {
+        if (selectedIds.length === 0) return;
+        if (!window.confirm(`Supprimer ${selectedIds.length} rendez-vous ?`)) return;
+
+        try {
+            const { error } = await (supabase as any)
+                .from('website')
+                .delete()
+                .in('id', selectedIds);
+
+            if (error) throw error;
+
+            toast.success('Rendez-vous supprimés');
+            setSelectedIds([]);
+            fetchData();
+        } catch (error) {
+            console.error('Error deleting:', error);
+            toast.error('Erreur lors de la suppression');
+        }
+    };
+
+    const toggleSelect = (id: string) => {
+        setSelectedIds(prev =>
+            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+        );
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedIds.length === filteredAppointments.length) {
+            setSelectedIds([]);
+        } else {
+            setSelectedIds(filteredAppointments.map(a => a.id));
+        }
+    };
+
     const filteredAppointments = appointments.filter(a => {
         const matchesSearch =
             a.client_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -128,12 +184,32 @@ const Appointment = () => {
             {/* Mini Nav */}
             <nav className="sticky top-4 left-1/2 z-50 -translate-x-1/2 w-[92%] max-w-5xl rounded-full border border-white/20 bg-white/40 backdrop-blur-md px-4 py-2 flex items-center justify-between shadow-lg mx-auto mb-6">
                 <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => window.history.back()} className="rounded-full h-8 w-8 text-[#2A2A2A]"><ArrowLeft className="h-4 w-4" /></Button>
-                    <span className="font-serif text-sm font-bold tracking-tight uppercase">Dashboard</span>
+                    <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="rounded-full h-8 w-8 text-[#2A2A2A] hidden sm:flex">
+                        <ArrowLeft className="h-4 w-4" />
+                    </Button>
+                    <div className="flex items-center gap-2 mr-2">
+                        <Checkbox
+                            checked={filteredAppointments.length > 0 && selectedIds.length === filteredAppointments.length}
+                            onCheckedChange={toggleSelectAll}
+                            className="rounded-md border-[#8A9A8A]/30 data-[state=checked]:bg-[#8A9A8A] data-[state=checked]:border-[#8A9A8A]"
+                        />
+                    </div>
+                    {selectedIds.length > 0 && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={handleDeleteMultiple}
+                            className="h-8 w-8 rounded-full text-rose-500 hover:bg-rose-50 animate-in zoom-in-50 hidden sm:flex"
+                        >
+                            <Trash2 className="h-4 w-4" />
+                        </Button>
+                    )}
                 </div>
 
-                <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full sm:hidden" onClick={() => setIsSearchOpen(!isSearchOpen)}><Search className="h-4 w-4" /></Button>
+                <div className="flex items-center gap-2 text-right">
+                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full sm:hidden" onClick={() => setIsSearchOpen(!isSearchOpen)}>
+                        <Search className="h-4 w-4" />
+                    </Button>
                     <div className="relative hidden sm:block">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#8A9A8A]/60" />
                         <Input
@@ -154,8 +230,41 @@ const Appointment = () => {
                             <SelectItem value="denied">Annulés</SelectItem>
                         </SelectContent>
                     </Select>
+
+                    {/* Mobile Actions - on right side */}
+                    <div className="flex items-center gap-1.5 sm:hidden">
+                        {selectedIds.length > 0 && (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={handleDeleteMultiple}
+                                className="h-8 w-8 rounded-full text-rose-500 hover:bg-rose-50 animate-in zoom-in-50"
+                            >
+                                <Trash2 className="h-4 w-4 rotate-12" />
+                            </Button>
+                        )}
+                        <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="rounded-full h-8 w-8 text-[#2A2A2A]">
+                            <ArrowLeft className="h-4 w-4" />
+                        </Button>
+                    </div>
                 </div>
             </nav>
+
+            {/* Mobile Search Bar Expand */}
+            {isSearchOpen && (
+                <div className="max-w-xl mx-auto px-[4%] mb-6 sm:hidden animate-in slide-in-from-top-2 fade-in">
+                    <div className="relative">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#8A9A8A]" />
+                        <Input
+                            autoFocus
+                            placeholder="Nom ou Téléphone..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="pl-11 h-12 rounded-[1.5rem] border-none bg-white shadow-xl shadow-[#8A9A8A]/10 focus-visible:ring-[#8A9A8A]/30 text-sm w-full"
+                        />
+                    </div>
+                </div>
+            )}
 
             <main className="max-w-4xl mx-auto px-4 animate-fade-in">
                 <header className="mb-8 text-center">
@@ -179,12 +288,22 @@ const Appointment = () => {
                 {/* Appointment Grid - Smaller Cards */}
                 <div className="grid gap-3 sm:gap-4">
                     {filteredAppointments.map((appt) => (
-                        <Card key={appt.id} className="overflow-hidden rounded-[1.8rem] border-none bg-white shadow-xl shadow-[#8A9A8A]/5">
+                        <Card key={appt.id} className={cn(
+                            "overflow-hidden rounded-[1.8rem] border-none bg-white shadow-xl shadow-[#8A9A8A]/5 transition-all",
+                            selectedIds.includes(appt.id) && "ring-2 ring-[#8A9A8A] bg-[#8A9A8A]/5"
+                        )}>
                             <CardContent className="p-4 sm:p-5">
                                 <div className="flex items-center justify-between gap-4">
                                     <div className="flex items-center gap-3 min-w-0">
-                                        <div className="w-10 h-10 rounded-2xl bg-[#EFEBE6] flex items-center justify-center text-[#8A9A8A] shrink-0">
-                                            <User className="h-5 w-5" />
+                                        <div className="flex items-center gap-2">
+                                            <Checkbox
+                                                checked={selectedIds.includes(appt.id)}
+                                                onCheckedChange={() => toggleSelect(appt.id)}
+                                                className="rounded-md border-[#8A9A8A]/30 data-[state=checked]:bg-[#8A9A8A] data-[state=checked]:border-[#8A9A8A]"
+                                            />
+                                            <div className="w-10 h-10 rounded-2xl bg-[#EFEBE6] flex items-center justify-center text-[#8A9A8A] shrink-0">
+                                                <User className="h-5 w-5" />
+                                            </div>
                                         </div>
                                         <div className="min-w-0">
                                             <div className="flex items-center gap-2 flex-wrap">
@@ -227,6 +346,14 @@ const Appointment = () => {
                                             onClick={() => handleUpdateStatus(appt.id, 'denied')}
                                         >
                                             <XCircle className="h-4 w-4" />
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 rounded-full text-rose-500 hover:bg-rose-50"
+                                            onClick={() => handleDeleteSingle(appt.id)}
+                                        >
+                                            <Trash2 className="h-4 w-4" />
                                         </Button>
                                     </div>
                                 </div>

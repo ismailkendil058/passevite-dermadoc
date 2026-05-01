@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
     LogOut, Search, MessageSquare, Calendar as CalendarIcon,
-    Users, CheckCircle2, XCircle, Clock, History, Plus, Phone, Trash2
+    Users, CheckCircle2, XCircle, Clock, History, Plus, Phone, Trash2, Pencil
 } from 'lucide-react';
 import { format, addHours, isWithinInterval, startOfDay, endOfDay, parseISO, startOfToday, endOfToday } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -86,9 +86,12 @@ const Rendezvous = () => {
     const { user, userRole, signOut } = useAuth();
     const [editingVisit, setEditingVisit] = useState<CompletedClient | null>(null);
     const [isAddVisitOpen, setIsAddVisitOpen] = useState(false);
+    const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
     const [showAddTreatment, setShowAddTreatment] = useState(false);
     const [showAddAppt, setShowAddAppt] = useState(false);
+    const [isBaseInfoOpen, setIsBaseInfoOpen] = useState(false);
+    const [baseInfo, setBaseInfo] = useState({ name: '', phone: '', client_id: '' });
     const [newVisitData, setNewVisitData] = useState<Partial<CompletedClient & { apptDate: Date; apptTime: string; apptDoctor: string; apptNotes: string }>>({
         client_name: '',
         phone: '',
@@ -137,6 +140,21 @@ const Rendezvous = () => {
         } finally {
             setLoading(false);
         }
+    };
+
+    const fetchClients = async () => {
+        let q = supabase
+            .from('completed_clients')
+            .select('*');
+
+        if (searchQuery.trim()) {
+            q = q.or(`client_name.ilike.%${searchQuery.trim()}%,phone.ilike.%${searchQuery.trim()}%`);
+        }
+
+        q = q.order('completed_at', { ascending: false }).limit(200);
+
+        const { data } = await q;
+        if (data) setClients(data as any);
     };
 
     const handleSaveVisit = async (visit: Partial<CompletedClient & { apptDate?: Date; apptTime?: string; apptDoctor?: string; apptNotes?: string }>) => {
@@ -201,10 +219,15 @@ const Rendezvous = () => {
                 if (apptErr) throw apptErr;
             }
 
-            toast.success('Enregistré avec succès');
+            // Close modals immediately
             setIsAddVisitOpen(false);
             setEditingVisit(null);
+
+            // Re-fetch in parallel
             fetchInitialData();
+            fetchClients();
+
+            toast.success('Enregistré avec succès');
         } catch (error) {
             console.error('Error saving visit/appt:', error);
             toast.error('Erreur lors de l\'enregistrement');
@@ -228,12 +251,56 @@ const Rendezvous = () => {
 
             toast.success('Visite supprimée');
             fetchInitialData();
+            fetchClients();
             if (viewingClient && viewingClient.id === visitId) {
                 setViewingClient(null);
             }
         } catch (error) {
             console.error('Error deleting visit:', error);
             toast.error('Erreur lors de la suppression');
+        }
+    };
+
+    const handleUpdateBaseInfo = async () => {
+        if (!baseInfo.name || !baseInfo.phone) {
+            toast.error('Le nom et le téléphone sont obligatoires');
+            return;
+        }
+
+        try {
+            // Update ALL records with this client_id to maintain dossier integrity
+            const { error } = await supabase
+                .from('completed_clients')
+                .update({
+                    client_name: baseInfo.name,
+                    phone: baseInfo.phone
+                })
+                .eq('client_id', baseInfo.client_id);
+
+            if (error) throw error;
+
+            // Also update any appointments with the old phone
+            await supabase
+                .from('appointments')
+                .update({
+                    client_name: baseInfo.name,
+                    client_phone: baseInfo.phone
+                })
+                .eq('client_phone', viewingPatient?.phone);
+
+            toast.success('Informations patient mises à jour');
+            setIsBaseInfoOpen(false);
+
+            // Update local viewing state if necessary
+            if (viewingPatient) {
+                setViewingPatient({ name: baseInfo.name, phone: baseInfo.phone });
+            }
+
+            fetchClients();
+            fetchInitialData();
+        } catch (error) {
+            console.error('Error updating patient info:', error);
+            toast.error('Erreur lors de la mise à jour');
         }
     };
 
@@ -277,19 +344,8 @@ const Rendezvous = () => {
 
     // Fetch clients with server-side debounce for scalability
     useEffect(() => {
-        const timeoutId = setTimeout(async () => {
-            let q = supabase
-                .from('completed_clients')
-                .select('*');
-
-            if (searchQuery.trim()) {
-                q = q.or(`client_name.ilike.%${searchQuery.trim()}%,phone.ilike.%${searchQuery.trim()}%`);
-            }
-
-            q = q.order('completed_at', { ascending: false }).limit(200);
-
-            const { data } = await q;
-            if (data) setClients(data as any);
+        const timeoutId = setTimeout(() => {
+            fetchClients();
         }, 300);
         return () => clearTimeout(timeoutId);
     }, [searchQuery]);
@@ -553,11 +609,30 @@ const Rendezvous = () => {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="icon" onClick={() => setIsSearchOpen(!isSearchOpen)} className="sm:hidden h-9 w-9">
+                        <Search className="h-5 w-5" />
+                    </Button>
                     <Button variant="ghost" size="icon" onClick={() => window.location.href = '/accueil'} className="h-9 w-9">
                         <LogOut className="h-5 w-5" />
                     </Button>
                 </div>
             </header>
+
+            {/* Mobile Search Bar */}
+            {isSearchOpen && (
+                <div className="px-4 pb-4 sm:hidden animate-in slide-in-from-top-2 fade-in">
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            autoFocus
+                            placeholder="Rechercher patient..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="pl-10 h-11 rounded-xl bg-muted/30 border-none focus-visible:ring-primary/20"
+                        />
+                    </div>
+                </div>
+            )}
 
             <main className="p-4 flex-1 space-y-6">
                 <Tabs defaultValue="upcoming" className="w-full">
@@ -761,7 +836,14 @@ const Rendezvous = () => {
                                                                 <Plus className="h-4 w-4" /> Nouveau RDV
                                                             </Button>
                                                             {['manager', 'admin'].includes(userRole || '') && (
-                                                                <Button variant="outline" size="sm" className="gap-2" onClick={() => setEditingVisit(entriesForChosen[0] || null)}>
+                                                                <Button variant="outline" size="sm" className="gap-2" onClick={() => {
+                                                                    setBaseInfo({
+                                                                        name: viewingPatient.name,
+                                                                        phone: viewingPatient.phone,
+                                                                        client_id: entriesForChosen[0]?.client_id || ''
+                                                                    });
+                                                                    setIsBaseInfoOpen(true);
+                                                                }}>
                                                                     <Users className="h-4 w-4" /> Modifier Patient
                                                                 </Button>
                                                             )}
@@ -800,7 +882,7 @@ const Rendezvous = () => {
                                                                         <TableHead className="text-xs h-9 text-right">Total</TableHead>
                                                                         <TableHead className="text-xs h-9 text-right">Payé</TableHead>
                                                                         <TableHead className="text-xs h-9 text-right uppercase font-black">Admin</TableHead>
-                                                                        {['manager', 'admin'].includes(userRole || '') && <TableHead className="text-xs h-9 text-right uppercase font-black">Actions</TableHead>}
+
                                                                     </TableRow>
                                                                 </TableHeader>
                                                                 <TableBody>
@@ -815,8 +897,7 @@ const Rendezvous = () => {
                                                                                 <TableCell className="text-xs py-2 text-right">
                                                                                     <div className="flex justify-end gap-1">
                                                                                         <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-500 hover:bg-blue-50" onClick={() => setEditingVisit(h)}>
-                                                                                            <Plus className="h-3.5 w-3.5 rotate-45" />
-                                                                                            <Users className="h-3.5 w-3.5" />
+                                                                                            <Pencil className="h-3.5 w-3.5" />
                                                                                         </Button>
                                                                                         <Button variant="ghost" size="icon" className="h-7 w-7 text-rose-500 hover:bg-rose-50" onClick={() => handleDeleteVisit(h.id)}>
                                                                                             <XCircle className="h-3.5 w-3.5" />
@@ -879,24 +960,32 @@ const Rendezvous = () => {
                                     </DialogHeader>
 
                                     <div className="flex-1 overflow-y-auto p-6 space-y-6 overscroll-contain">
-                                        <div className="space-y-4">
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] uppercase font-black text-muted-foreground">Nom du Patient</label>
-                                                <Input
-                                                    placeholder="Nom complet"
-                                                    value={(editingVisit || newVisitData).client_name}
-                                                    onChange={e => editingVisit ? setEditingVisit({ ...editingVisit, client_name: e.target.value }) : setNewVisitData({ ...newVisitData, client_name: e.target.value })}
-                                                />
+                                        {editingVisit ? (
+                                            <div className="bg-muted/30 p-3 rounded-xl border border-border/50">
+                                                <p className="text-[10px] uppercase font-bold text-muted-foreground mb-0.5">Visite de</p>
+                                                <p className="text-sm font-black text-primary leading-tight">{editingVisit.client_name}</p>
+                                                <p className="text-[11px] text-muted-foreground">{editingVisit.phone}</p>
                                             </div>
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] uppercase font-black text-muted-foreground">Téléphone</label>
-                                                <Input
-                                                    placeholder="05XX XX XX XX"
-                                                    value={(editingVisit || newVisitData).phone}
-                                                    onChange={e => editingVisit ? setEditingVisit({ ...editingVisit, phone: e.target.value }) : setNewVisitData({ ...newVisitData, phone: e.target.value })}
-                                                />
+                                        ) : (
+                                            <div className="space-y-4">
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] uppercase font-black text-muted-foreground">Nom du Patient</label>
+                                                    <Input
+                                                        placeholder="Nom complet"
+                                                        value={newVisitData.client_name}
+                                                        onChange={e => setNewVisitData({ ...newVisitData, client_name: e.target.value })}
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] uppercase font-black text-muted-foreground">Téléphone</label>
+                                                    <Input
+                                                        placeholder="05XX XX XX XX"
+                                                        value={newVisitData.phone}
+                                                        onChange={e => setNewVisitData({ ...newVisitData, phone: e.target.value })}
+                                                    />
+                                                </div>
                                             </div>
-                                        </div>
+                                        )}
 
                                         {!editingVisit && (
                                             <div className="flex gap-2">
@@ -1341,6 +1430,36 @@ const Rendezvous = () => {
                                 <Trash2 className="h-4 w-4" />
                             </Button>
                         )}
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isBaseInfoOpen} onOpenChange={setIsBaseInfoOpen}>
+                <DialogContent className="max-w-md w-[95vw] rounded-2xl p-6 space-y-6">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-bold italic text-primary">Modifier Identité Patient</DialogTitle>
+                        <DialogDescription>Mettre à jour le nom et le numéro de téléphone pour tout le dossier.</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <label className="text-[10px] uppercase font-black text-muted-foreground">Nom Complet</label>
+                            <Input
+                                value={baseInfo.name}
+                                onChange={e => setBaseInfo({ ...baseInfo, name: e.target.value })}
+                                placeholder="Nom du patient"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] uppercase font-black text-muted-foreground">Téléphone</label>
+                            <Input
+                                value={baseInfo.phone}
+                                onChange={e => setBaseInfo({ ...baseInfo, phone: e.target.value })}
+                                placeholder="05XX XX XX XX"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button className="w-full h-11 rounded-xl font-bold" onClick={handleUpdateBaseInfo}>Enregistrer les modifications</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { UserCog } from 'lucide-react';
+import { UserCog, ArrowLeft } from 'lucide-react';
 
 const LoginManager = () => {
   const [username, setUsername] = useState('');
@@ -38,7 +38,15 @@ const LoginManager = () => {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#EFEBE6] p-4 font-sans selection:bg-[#8A9A8A]/30">
       <Card className="w-full max-w-md shadow-2xl border-none rounded-[2.5rem] bg-white overflow-hidden">
-        <CardHeader className="text-center space-y-6 pt-10 pb-2">
+        <CardHeader className="text-center space-y-6 pt-10 pb-2 relative">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate('/')}
+            className="absolute left-6 top-6 rounded-full hover:bg-muted"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
           <div className="mx-auto block">
             <img src="/Untitled-1.png" alt="Logo" className="h-10 w-auto brightness-0 opacity-80 mx-auto" />
             <h1 className="text-3xl font-serif font-bold tracking-tight text-[#2A2A2A] mt-4 uppercase">DermaDoc</h1>
