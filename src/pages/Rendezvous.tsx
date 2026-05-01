@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Calendar } from '@/components/ui/calendar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
     LogOut, Search, MessageSquare, Calendar as CalendarIcon,
@@ -91,6 +92,7 @@ const Rendezvous = () => {
     const [showAddTreatment, setShowAddTreatment] = useState(false);
     const [showAddAppt, setShowAddAppt] = useState(false);
     const [isBaseInfoOpen, setIsBaseInfoOpen] = useState(false);
+    const [isDeletingPatient, setIsDeletingPatient] = useState(false);
     const [baseInfo, setBaseInfo] = useState({ name: '', phone: '', client_id: '' });
     const [newVisitData, setNewVisitData] = useState<Partial<CompletedClient & { apptDate: Date; apptTime: string; apptDoctor: string; apptNotes: string }>>({
         client_name: '',
@@ -163,15 +165,16 @@ const Rendezvous = () => {
             return;
         }
 
-        const isNewPatientOnly = !showAddTreatment && !showAddAppt && !editingVisit;
+        const isNewEntry = !editingVisit && !visit.id;
 
         try {
             // 1. Handle Treatment (completed_clients)
-            if (showAddTreatment || editingVisit || isNewPatientOnly) {
+            // Always create a record for a new entry to establish the patient in the system
+            if (showAddTreatment || editingVisit || isNewEntry) {
                 const treatmentData: any = {
                     client_name: visit.client_name,
                     phone: visit.phone,
-                    treatment: showAddTreatment || editingVisit ? visit.treatment : 'Nouveau Patient',
+                    treatment: (showAddTreatment || editingVisit) && visit.treatment ? visit.treatment : 'Nouveau Patient',
                     total_amount: Number(visit.total_amount || 0),
                     tranche_paid: Number(visit.tranche_paid || 0),
                     doctor_id: visit.doctor_id || null,
@@ -301,6 +304,50 @@ const Rendezvous = () => {
         } catch (error) {
             console.error('Error updating patient info:', error);
             toast.error('Erreur lors de la mise à jour');
+        }
+    };
+
+    const handleDeletePatient = async () => {
+        if (!baseInfo.phone || !baseInfo.name) {
+            toast.error('Informations patient manquantes');
+            return;
+        }
+
+        if (!window.confirm(`Supprimer définitivement le dossier de ${baseInfo.name} ? Cette action supprimera tout l'historique et les rendez-vous.`)) return;
+
+        setIsDeletingPatient(true);
+        try {
+            // Delete from completed_clients by phone + name for maximum reliability
+            const deleteHistory = supabase
+                .from('completed_clients')
+                .delete()
+                .eq('phone', baseInfo.phone)
+                .ilike('client_name', baseInfo.name);
+
+            // Delete from appointments
+            const deleteAppts = supabase
+                .from('appointments')
+                .delete()
+                .eq('client_phone', baseInfo.phone)
+                .ilike('client_name', baseInfo.name);
+
+            const [res1, res2] = await Promise.all([deleteHistory, deleteAppts]);
+
+            if (res1.error) throw res1.error;
+            if (res2.error) throw res2.error;
+
+            toast.success('Dossier patient supprimé');
+            setIsBaseInfoOpen(false);
+            setViewingPatient(null);
+
+            // Fast refresh
+            fetchClients();
+            fetchInitialData();
+        } catch (error) {
+            console.error('Error deleting patient dossier:', error);
+            toast.error('Erreur lors de la suppression');
+        } finally {
+            setIsDeletingPatient(false);
         }
     };
 
@@ -1089,16 +1136,16 @@ const Rendezvous = () => {
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <div className="space-y-2">
                                                         <label className="text-[10px] uppercase font-black text-muted-foreground">Date</label>
-                                                        <Dialog>
-                                                            <DialogTrigger asChild>
+                                                        <Popover>
+                                                            <PopoverTrigger asChild>
                                                                 <Button variant="outline" className="w-full justify-start text-left font-normal h-11 rounded-xl px-3 text-xs">
                                                                     {newVisitData.apptDate ? format(newVisitData.apptDate, 'dd/MM/yy', { locale: fr }) : <span>Date...</span>}
                                                                 </Button>
-                                                            </DialogTrigger>
-                                                            <DialogContent className="p-0 border-none shadow-none max-w-fit">
+                                                            </PopoverTrigger>
+                                                            <PopoverContent className="w-auto p-0 border-none shadow-2xl rounded-2xl" align="start">
                                                                 <Calendar mode="single" selected={newVisitData.apptDate} onSelect={(d) => setNewVisitData({ ...newVisitData, apptDate: d || new Date() })} locale={fr} />
-                                                            </DialogContent>
-                                                        </Dialog>
+                                                            </PopoverContent>
+                                                        </Popover>
                                                     </div>
                                                     <div className="space-y-2">
                                                         <label className="text-[10px] uppercase font-black text-muted-foreground">Heure</label>
@@ -1277,22 +1324,42 @@ const Rendezvous = () => {
 
                                                                 {/* Appointments for this doctor */}
                                                                 <div className="relative h-full pt-10">
-                                                                    {parsedAppointments
-                                                                        .filter(a => a.status !== 'denied' && a.doctor_id === doctor.id && a.startOfDayTime === startOfDay(newApptDate || new Date()).getTime())
-                                                                        .map(appt => {
+                                                                    {(() => {
+                                                                        const dayStart = startOfDay(newApptDate || new Date()).getTime();
+                                                                        const filteredAppts = parsedAppointments.filter(a =>
+                                                                            a.status !== 'denied' &&
+                                                                            a.doctor_id === doctor.id &&
+                                                                            a.startOfDayTime === dayStart
+                                                                        );
+
+                                                                        // Group by hour
+                                                                        const hourGroups: Record<number, any[]> = {};
+                                                                        filteredAppts.forEach(a => {
+                                                                            const h = parseISO(a.appointment_at).getHours();
+                                                                            if (!hourGroups[h]) hourGroups[h] = [];
+                                                                            hourGroups[h].push(a);
+                                                                        });
+
+                                                                        return filteredAppts.map(appt => {
                                                                             const date = parseISO(appt.appointment_at);
-                                                                            const hours = date.getHours();
-                                                                            const minutes = date.getMinutes();
-                                                                            const offset = (hours - 8) * 80 + (minutes / 60) * 80;
+                                                                            const h = date.getHours();
+                                                                            const m = date.getMinutes();
+                                                                            const offset = (h - 8) * 80 + (m / 60) * 80;
+
+                                                                            const group = hourGroups[h] || [];
+                                                                            const index = group.findIndex(a => a.id === appt.id);
+                                                                            const total = group.length;
+                                                                            const isOverlapping = total > 1;
 
                                                                             return (
                                                                                 <div
                                                                                     key={appt.id}
                                                                                     className={`
-                                                                                        absolute left-2 right-2 p-3 rounded-2xl border-l-[6px] 
+                                                                                        absolute p-3 rounded-2xl border-l-[6px] 
                                                                                         shadow-xl shadow-primary/5 transition-all duration-300 
                                                                                         hover:scale-[1.02] active:scale-95 z-20 cursor-pointer group
                                                                                         bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border border-primary/5
+                                                                                        ${isOverlapping ? (index === 0 ? 'left-2 w-[calc(50%-12px)]' : 'right-2 w-[calc(50%-12px)]') : 'left-2 right-2'}
                                                                                         ${appt.status === 'coming' ? 'border-l-emerald-500 shadow-emerald-500/10' :
                                                                                             appt.status === 'denied' ? 'border-l-rose-500 shadow-rose-500/10' :
                                                                                                 appt.status === 'attended' ? 'border-l-blue-500 shadow-blue-500/10 opacity-75' :
@@ -1316,8 +1383,8 @@ const Rendezvous = () => {
                                                                                     </p>
                                                                                 </div>
                                                                             );
-                                                                        })
-                                                                    }
+                                                                        });
+                                                                    })()}
                                                                 </div>
                                                             </div>
                                                         ))}
@@ -1384,17 +1451,17 @@ const Rendezvous = () => {
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <label className="text-xs font-black uppercase text-muted-foreground">Date</label>
-                                <Dialog>
-                                    <DialogTrigger asChild>
+                                <Popover>
+                                    <PopoverTrigger asChild>
                                         <Button variant="outline" className="w-full justify-start text-left font-normal h-11 rounded-xl">
                                             <CalendarIcon className="mr-2 h-4 w-4" />
                                             {newApptDate ? format(newApptDate, 'PP', { locale: fr }) : <span>Choisir...</span>}
                                         </Button>
-                                    </DialogTrigger>
-                                    <DialogContent className="p-0 border-none shadow-none max-w-fit">
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0 border-none shadow-2xl rounded-2xl" align="start">
                                         <Calendar mode="single" selected={newApptDate} onSelect={(d) => { setNewApptDate(d); }} locale={fr} />
-                                    </DialogContent>
-                                </Dialog>
+                                    </PopoverContent>
+                                </Popover>
                             </div>
                             <div className="space-y-2">
                                 <label className="text-xs font-black uppercase text-muted-foreground">Heure</label>
@@ -1458,8 +1525,22 @@ const Rendezvous = () => {
                             />
                         </div>
                     </div>
-                    <DialogFooter>
-                        <Button className="w-full h-11 rounded-xl font-bold" onClick={handleUpdateBaseInfo}>Enregistrer les modifications</Button>
+                    <DialogFooter className="gap-2 sm:flex-row flex-col">
+                        <Button className="flex-1 h-11 rounded-xl font-bold order-1 sm:order-2" onClick={handleUpdateBaseInfo}>Enregistrer les modifications</Button>
+                        {['manager', 'admin'].includes(userRole || '') && (
+                            <Button
+                                variant="destructive"
+                                className="sm:w-11 h-11 rounded-xl order-2 sm:order-1"
+                                onClick={handleDeletePatient}
+                                disabled={isDeletingPatient}
+                            >
+                                {isDeletingPatient ? (
+                                    <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                                ) : (
+                                    <Trash2 className="h-4 w-4" />
+                                )}
+                            </Button>
+                        )}
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
