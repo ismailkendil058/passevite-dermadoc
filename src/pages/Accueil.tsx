@@ -1119,7 +1119,7 @@ const Accueil = () => {
           <DialogHeader>
             <DialogTitle>Finaliser · {selectedEntry?.client_id}</DialogTitle>
           </DialogHeader>
-          <div className="relative">
+          <div className="max-h-[60vh] overflow-y-auto pr-1">
             <div className="space-y-3 sm:space-y-4 pb-2">
               <Input
                 placeholder="Nom du client"

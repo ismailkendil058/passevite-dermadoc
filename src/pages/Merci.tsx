@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 
 const Merci = () => {
   return (
@@ -15,7 +15,7 @@ const Merci = () => {
         <div className="inline-block mb-12 p-4 rounded-2xl bg-white shadow-2xl shadow-[#5B5BD6]/10 animate-float border border-[#5B5BD6]/10 mx-auto">
           <img src="/VitalWeb.png" alt="PasseVite Logo" className="h-16 w-16 object-contain" />
         </div>
-        
+
         {/* Confirmation */}
         <Card className="backdrop-blur-sm bg-white/70 dark:bg-black/20 border-[#5B5BD6]/20 shadow-2xl max-w-3xl mx-auto">
           <CardHeader className="pb-6">
@@ -29,23 +29,14 @@ const Merci = () => {
               Notre équipe examinera votre message afin d'améliorer votre expérience.
             </CardDescription>
           </CardHeader>
-          
+
           <CardContent>
-            <Link to="/" className="block mx-auto" title="Retour à l'accueil">
-              <Button 
-                variant="outline" 
-                size="lg" 
-                className="h-16 w-full max-w-md text-xl font-bold shadow-xl shadow-gray-200/50 hover:shadow-gray-300/50 transition-all duration-300 rounded-3xl border-2 hover:border-[#5B5BD6]/50 backdrop-blur-sm hover:scale-[1.02] hover:text-[#5B5BD6]"
-              >
-                <ArrowLeft className="w-6 h-6 mr-3" />
-                Retour à l'accueil
-              </Button>
-            </Link>
+
           </CardContent>
         </Card>
       </div>
 
-<div className="hidden" dangerouslySetInnerHTML={{
+      <div className="hidden" dangerouslySetInnerHTML={{
         __html: `
           @keyframes fade-in { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
           .animate-fade-in { animation: fade-in 1s ease-out; }

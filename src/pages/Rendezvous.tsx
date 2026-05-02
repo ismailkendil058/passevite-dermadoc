@@ -799,7 +799,7 @@ const Rendezvous = () => {
                                         className="pl-10 h-12 rounded-xl"
                                     />
                                 </div>
-                                {['manager', 'admin'].includes(userRole || '') && (
+                                {['manager', 'admin', 'receptionist'].includes(userRole || '') && (
                                     <Button
                                         className="w-full sm:w-auto h-12 rounded-xl px-6 gap-2 shadow-lg shadow-primary/20"
                                         onClick={() => {
