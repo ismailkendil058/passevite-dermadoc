@@ -377,6 +377,22 @@ export function useQueue() {
     return { error };
   };
 
+  const updateCompletedClient = async (id: string, updates: any) => {
+    const { error } = await supabase
+      .from('completed_clients')
+      .update(updates)
+      .eq('id', id);
+    return { error };
+  };
+
+  const deleteCompletedClient = async (id: string) => {
+    const { error } = await supabase
+      .from('completed_clients')
+      .delete()
+      .eq('id', id);
+    return { error };
+  };
+
   return {
     entries,
     inCabinetEntries,
@@ -394,5 +410,7 @@ export function useQueue() {
     fetchActiveSession,
     updateClient,
     deleteClient,
+    updateCompletedClient,
+    deleteCompletedClient,
   };
 }

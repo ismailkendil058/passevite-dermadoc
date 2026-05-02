@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Phone, Plus, LogOut, ChevronRight, ChevronLeft, Users, Clock, CheckCircle, XCircle, MessageCircle, Pencil, Trash2, UserCheck, Calendar as CalendarIcon, DollarSign, ShoppingCart, Sparkles } from 'lucide-react';
+import { Phone, Plus, LogOut, ChevronRight, ChevronLeft, Users, Clock, CheckCircle, XCircle, MessageCircle, Pencil, Trash2, UserCheck, Calendar as CalendarIcon, DollarSign, ShoppingCart, Sparkles, Lock, Unlock } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -127,7 +127,54 @@ const QueueItem = React.memo(({ entry, index, onEdit, onDelete, onNext }: { entr
 
 const Accueil = () => {
   const { user, signOut } = useAuth();
-  const { entries, inCabinetEntries, activeSession, doctors, loading, openSession, closeSession, addClient, callClient, completeClient, getStats, updateClient, deleteClient } = useQueue();
+  const { entries, inCabinetEntries, activeSession, doctors, loading, openSession, closeSession, addClient, callClient, completeClient, getStats, updateClient, deleteClient, updateCompletedClient, deleteCompletedClient } = useQueue();
+
+  // Manager Auth for editing today's clients
+  const [isManagerAuthorized, setIsManagerAuthorized] = useState(false);
+  const [managerPassword, setManagerPassword] = useState('');
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+
+  // Edit Completed Client State
+  const [editCompletedClient, setEditCompletedClient] = useState<any>(null);
+  const [showEditCompletedModal, setShowEditCompletedModal] = useState(false);
+  const [ecName, setEcName] = useState('');
+  const [ecTreatment, setEcTreatment] = useState('');
+  const [ecTotal, setEcTotal] = useState('');
+  const [ecPaid, setEcPaid] = useState('');
+  const [ecNotes, setEcNotes] = useState('');
+
+  const handleVerifyManager = () => {
+    if (managerPassword === 'admin123') {
+      setIsManagerAuthorized(true);
+      setShowPasswordDialog(false);
+      setManagerPassword('');
+      toast.success('Mode édition activé');
+    } else {
+      toast.error('Mot de passe incorrect');
+    }
+  };
+
+  const fetchTodayClients = async () => {
+    try {
+      setLoadingTodayClients(true);
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      const nextStart = new Date(start);
+      nextStart.setDate(nextStart.getDate() + 1);
+      const { data } = await supabase
+        .from('completed_clients')
+        .select('*, doctor:doctors(name)')
+        .gte('completed_at', start.toISOString())
+        .lt('completed_at', nextStart.toISOString())
+        .order('completed_at', { ascending: false });
+      setTodayClients(data || []);
+    } catch (err) {
+      console.error('Error fetching today clients', err);
+      setTodayClients([]);
+    } finally {
+      setLoadingTodayClients(false);
+    }
+  };
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
@@ -186,6 +233,7 @@ const Accueil = () => {
   const [nextApptDate, setNextApptDate] = useState<Date | undefined>(undefined);
   const [nextApptTime, setNextApptTime] = useState('09:00');
   const [nextApptDoctorId, setNextApptDoctorId] = useState('');
+  const [nextApptNote, setNextApptNote] = useState('');
 
   // Treatments list (load from localStorage to allow adding custom treatments)
   const [treatmentsList, setTreatmentsList] = useState<string[]>(TREATMENTS);
@@ -406,6 +454,7 @@ const Accueil = () => {
     setNextApptDate(undefined);
     setNextApptTime('09:00');
     setNextApptDoctorId(entry.doctor_id);
+    setNextApptNote('');
     setShowCompleteModal(true);
 
   };
@@ -438,7 +487,8 @@ const Accueil = () => {
             client_name: clientName.trim(),
             doctor_id: nextApptDoctorId,
             appointment_at: appointmentAt.toISOString(),
-            status: 'scheduled'
+            status: 'scheduled',
+            notes: nextApptNote.trim() || null
           });
 
         toast.success('Rendez-vous programmé');
@@ -598,26 +648,8 @@ const Accueil = () => {
         </div>
         <div className="flex gap-1.5 sm:gap-2 mx-auto">
           <Button onClick={async () => {
-            try {
-              setLoadingTodayClients(true);
-              const start = new Date();
-              start.setHours(0, 0, 0, 0);
-              const nextStart = new Date(start);
-              nextStart.setDate(nextStart.getDate() + 1);
-              const { data } = await supabase
-                .from('completed_clients')
-                .select('*, doctor:doctors(name)')
-                .gte('completed_at', start.toISOString())
-                .lt('completed_at', nextStart.toISOString())
-                .order('completed_at', { ascending: false });
-              setTodayClients(data || []);
-            } catch (err) {
-              console.error('Error fetching today clients', err);
-              setTodayClients([]);
-            } finally {
-              setLoadingTodayClients(false);
-              setShowTodayModal(true);
-            }
+            await fetchTodayClients();
+            setShowTodayModal(true);
           }} variant="outline" size="sm" className="h-8 px-2 sm:px-3 text-[11px] font-black uppercase">Terminer</Button>
           <Button asChild variant="secondary" size="sm" className="h-8 px-2 sm:px-3 text-[11px] font-black uppercase tracking-widest bg-primary/10 text-primary hover:bg-primary/20 border-0 rounded-full sm:rounded-md shadow-none">
             <Link to="/accueil/factures/ajouter">
@@ -681,7 +713,24 @@ const Accueil = () => {
       <Dialog open={showTodayModal} onOpenChange={setShowTodayModal}>
         <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-2xl max-h-[calc(100vh-4rem)] overflow-hidden">
           <DialogHeader>
-            <DialogTitle>Clients traités aujourd'hui</DialogTitle>
+            <div className="flex items-center justify-between pr-8">
+              <DialogTitle>Clients traités aujourd'hui</DialogTitle>
+              {!isManagerAuthorized ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 text-xs gap-1.5 text-muted-foreground hover:text-primary"
+                  onClick={() => setShowPasswordDialog(true)}
+                >
+                  <Lock className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Modifier</span>
+                </Button>
+              ) : (
+                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 gap-1.5 py-1">
+                  <Unlock className="h-3.5 w-3.5" /> Mode Manager
+                </Badge>
+              )}
+            </div>
           </DialogHeader>
           <div className="relative">
             <div className="max-h-[calc(100vh-28rem)] overflow-y-auto space-y-3 py-2 pr-2">
@@ -706,8 +755,62 @@ const Accueil = () => {
                             <div className="text-xs text-muted-foreground">Payé: {(c.tranche_paid || 0).toLocaleString()} DZD</div>
                           </div>
                         </div>
-                        <div className="mt-2 text-sm text-muted-foreground">Traitement: {c.treatment}</div>
-                        {c.notes && <div className="mt-1 text-xs text-muted-foreground">Note: {c.notes}</div>}
+                        <div className="mt-2 text-sm text-muted-foreground flex items-center justify-between">
+                          <div>Traitement: {c.treatment}</div>
+                          {isManagerAuthorized && (
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-muted-foreground hover:text-primary"
+                                onClick={() => {
+                                  setEditCompletedClient(c);
+                                  setEcName(c.client_name);
+                                  setEcTreatment(c.treatment);
+                                  setEcTotal(c.total_amount.toString());
+                                  setEcPaid(c.tranche_paid.toString());
+                                  setEcNotes(c.notes || '');
+                                  setShowEditCompletedModal(true);
+                                }}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive">
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Supprimer ce traitement ?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Cette action supprimera le record du client {c.client_name} pour le traitement {c.treatment}.
+                                      Les statistiques financières seront impactées.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      className="bg-destructive text-destructive-foreground"
+                                      onClick={async () => {
+                                        const { error } = await deleteCompletedClient(c.id);
+                                        if (error) toast.error('Erreur');
+                                        else {
+                                          toast.success('Supprimé');
+                                          fetchTodayClients();
+                                        }
+                                      }}
+                                    >
+                                      Supprimer
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          )}
+                        </div>
+                        {c.notes && <div className="mt-1 text-xs text-muted-foreground italic">Note: {c.notes}</div>}
                       </CardContent>
                     </Card>
                   ))}
@@ -715,8 +818,88 @@ const Accueil = () => {
               )}
             </div>
           </div>
+          <DialogFooter className="gap-2">
+            {isManagerAuthorized && (
+              <Button variant="outline" onClick={() => setIsManagerAuthorized(false)} className="flex-1">
+                Désactiver Mode Manager
+              </Button>
+            )}
+            <Button onClick={() => setShowTodayModal(false)} className={isManagerAuthorized ? 'flex-1' : 'w-full'}>Fermer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manager Password Dialog */}
+      <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
+        <DialogContent className="max-w-[320px]">
+          <DialogHeader>
+            <DialogTitle>Accès Manager</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <p className="text-sm text-muted-foreground">Veuillez entrer le mot de passe manager pour modifier les traitements.</p>
+            <Input
+              type="password"
+              placeholder="Mot de passe"
+              value={managerPassword}
+              onChange={(e) => setManagerPassword(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleVerifyManager()}
+              autoFocus
+            />
+          </div>
           <DialogFooter>
-            <Button onClick={() => setShowTodayModal(false)} className="w-full">Fermer</Button>
+            <Button variant="outline" onClick={() => setShowPasswordDialog(false)}>Annuler</Button>
+            <Button onClick={handleVerifyManager}>Valider</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Completed Client Modal */}
+      <Dialog open={showEditCompletedModal} onOpenChange={setShowEditCompletedModal}>
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Modifier le traitement</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Nom du patient</label>
+              <Input value={ecName} onChange={e => setEcName(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Traitement</label>
+              <Input value={ecTreatment} onChange={e => setEcTreatment(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Total (DZD)</label>
+                <Input type="number" value={ecTotal} onChange={e => setEcTotal(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Payé (DZD)</label>
+                <Input type="number" value={ecPaid} onChange={e => setEcPaid(e.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Notes</label>
+              <Input value={ecNotes} onChange={e => setEcNotes(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditCompletedModal(false)}>Annuler</Button>
+            <Button onClick={async () => {
+              const { error } = await updateCompletedClient(editCompletedClient.id, {
+                client_name: ecName,
+                treatment: ecTreatment,
+                total_amount: parseFloat(ecTotal) || 0,
+                tranche_paid: parseFloat(ecPaid) || 0,
+                notes: ecNotes
+              });
+              if (error) toast.error('Erreur');
+              else {
+                toast.success('Modifié');
+                setShowEditCompletedModal(false);
+                fetchTodayClients();
+              }
+            }}>Enregistrer</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1078,6 +1261,15 @@ const Accueil = () => {
                         ))}
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase text-muted-foreground">Motif du rendez-vous</label>
+                    <Input
+                      placeholder="Motif (optionnel)"
+                      value={nextApptNote}
+                      onChange={(e) => setNextApptNote(e.target.value)}
+                      className="h-10"
+                    />
                   </div>
                 </div>
               )}
