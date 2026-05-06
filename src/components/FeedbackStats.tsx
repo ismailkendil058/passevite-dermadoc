@@ -6,8 +6,8 @@ import { ThumbsUp, MessageSquare } from 'lucide-react';
 
 interface Feedback {
   id: string;
-  name: string;
-  phone: string;
+  name: string | null;
+  phone: string | null;
   message: string;
   created_at: string;
 }
@@ -23,28 +23,34 @@ export const FeedbackStats = () => {
     if (!isOpen) return;
     setLoading(true);
 
-    // Fetch stats
-    const { data: statsData, error: statsError } = await supabase
-      .from('feedback_stats')
-      .select('satisfied_count, feedback_count')
-      .single();
+    try {
+      // Fetch satisfied clients count (sum of all daily counts)
+      const { data: satisfiedData, error: satisfiedError } = await supabase
+        .from('satisfied_stats')
+        .select('count');
 
-    if (statsData) {
-      setSatisfiedCount(statsData.satisfied_count);
-      setFeedbackCount(statsData.feedback_count);
+      if (satisfiedError) throw satisfiedError;
+
+      const totalSatisfied = satisfiedData?.reduce((acc, curr) => acc + (curr.count || 0), 0) || 0;
+      setSatisfiedCount(totalSatisfied);
+
+      // Fetch feedbacks and their count
+      const { data: feedbacksData, error: feedbacksError, count } = await supabase
+        .from('feedbacks')
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false });
+
+      if (feedbacksError) throw feedbacksError;
+
+      if (feedbacksData) {
+        setFeedbacks(feedbacksData);
+        setFeedbackCount(count || feedbacksData.length);
+      }
+    } catch (error) {
+      console.error('Error fetching satisfaction stats:', error);
+    } finally {
+      setLoading(false);
     }
-    if (statsError) console.error('Error fetching stats:', statsError);
-
-    // Fetch feedbacks
-    const { data: feedbacksData, error: feedbacksError } = await supabase
-      .from('feedbacks')
-      .select('*')
-      .order('created_at', { ascending: false });
-    
-    if (feedbacksData) setFeedbacks(feedbacksData);
-    if (feedbacksError) console.error('Error fetching feedbacks:', feedbacksError);
-
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -54,32 +60,44 @@ export const FeedbackStats = () => {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="h-8 w-8 p-0">
-          <MessageSquare className="h-4 w-4" />
+        <Button variant="ghost" className="h-9 gap-2 text-[#2A2A2A] hover:bg-[#8A9A8A]/10">
+          <div className="relative">
+            <MessageSquare className="h-4 w-4" />
+            {(feedbackCount > 0) && (
+              <span className="absolute -top-1 -right-1 flex h-2 w-2 rounded-full bg-[#8A9A8A]" />
+            )}
+          </div>
+          <span className="text-xs font-semibold hidden sm:inline">Satisfaction</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Statistiques de satisfaction</DialogTitle>
+      <DialogContent className="max-w-xl rounded-[2.5rem] border-none bg-[#EFEBE6] shadow-2xl p-0 overflow-hidden">
+        <DialogHeader className="p-8 pb-4">
+          <DialogTitle className="font-serif text-2xl font-light text-[#2A2A2A]">
+            Flux <span className="italic text-[#8A9A8A]">Satisfaction</span>
+          </DialogTitle>
         </DialogHeader>
-        <div className="py-4">
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <div className="flex items-center gap-4 p-4 rounded-lg bg-green-100 dark:bg-green-900/50">
-              <ThumbsUp className="h-8 w-8 text-green-600 dark:text-green-400" />
-              <div>
-                <p className="text-3xl font-bold">{satisfiedCount}</p>
-                <p className="text-sm text-muted-foreground">Clients satisfaits</p>
+        <div className="px-8 pb-8">
+          <div className="grid grid-cols-2 gap-4 mb-8">
+            <div className="flex flex-col items-center gap-3 p-6 rounded-3xl bg-white shadow-xl shadow-[#8A9A8A]/5 border border-[#8A9A8A]/10">
+              <div className="p-3 rounded-2xl bg-[#8A9A8A]/10">
+                <ThumbsUp className="h-6 w-6 text-[#8A9A8A]" />
+              </div>
+              <div className="text-center">
+                <p className="text-3xl font-serif font-bold text-[#2A2A2A]">{satisfiedCount}</p>
+                <p className="text-[10px] font-bold text-[#8A9A8A] uppercase tracking-widest">Satisfaits</p>
               </div>
             </div>
-            <div className="flex items-center gap-4 p-4 rounded-lg bg-blue-100 dark:bg-blue-900/50">
-              <MessageSquare className="h-8 w-8 text-blue-600 dark:text-blue-400" />
-              <div>
-                <p className="text-3xl font-bold">{feedbackCount}</p>
-                <p className="text-sm text-muted-foreground">Avis & retours</p>
+            <div className="flex flex-col items-center gap-3 p-6 rounded-3xl bg-white shadow-xl shadow-[#8A9A8A]/5 border border-[#8A9A8A]/10">
+              <div className="p-3 rounded-2xl bg-[#8A9A8A]/10">
+                <MessageSquare className="h-6 w-6 text-[#8A9A8A]" />
+              </div>
+              <div className="text-center">
+                <p className="text-3xl font-serif font-bold text-[#2A2A2A]">{feedbackCount}</p>
+                <p className="text-[10px] font-bold text-[#8A9A8A] uppercase tracking-widest">Avis Clients</p>
               </div>
             </div>
           </div>
-          
+
           <h3 className="text-lg font-semibold mb-2">Derniers avis</h3>
           {loading ? (
             <p className="text-center text-muted-foreground">Chargement...</p>

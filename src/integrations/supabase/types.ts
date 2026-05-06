@@ -491,6 +491,45 @@ export type Database = {
         }
         Relationships: []
       }
+      satisfied_stats: {
+        Row: {
+          date: string
+          count: number
+        }
+        Insert: {
+          date: string
+          count?: number
+        }
+        Update: {
+          date?: string
+          count?: number
+        }
+        Relationships: []
+      }
+      feedbacks: {
+        Row: {
+          id: string
+          name: string | null
+          phone: string | null
+          message: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          name?: string | null
+          phone?: string | null
+          message: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string | null
+          phone?: string | null
+          message?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

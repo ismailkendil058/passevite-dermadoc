@@ -184,8 +184,9 @@ const Appointment = () => {
             {/* Mini Nav */}
             <nav className="sticky top-4 left-1/2 z-50 -translate-x-1/2 w-[92%] max-w-5xl rounded-full border border-white/20 bg-white/40 backdrop-blur-md px-4 py-2 flex items-center justify-between shadow-lg mx-auto mb-6">
                 <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="rounded-full h-8 w-8 text-[#2A2A2A] hidden sm:flex">
-                        <ArrowLeft className="h-4 w-4" />
+                    <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="rounded-full gap-2 text-[#2A2A2A] hover:bg-white/50 px-3 h-9">
+                        <ArrowLeft className="h-5 w-5" />
+                        <span className="text-xs font-medium">Retour</span>
                     </Button>
                     <div className="flex items-center gap-2 mr-2">
                         <Checkbox
@@ -199,7 +200,7 @@ const Appointment = () => {
                             variant="ghost"
                             size="icon"
                             onClick={handleDeleteMultiple}
-                            className="h-8 w-8 rounded-full text-rose-500 hover:bg-rose-50 animate-in zoom-in-50 hidden sm:flex"
+                            className="h-8 w-8 rounded-full text-rose-500 hover:bg-rose-50 animate-in zoom-in-50"
                         >
                             <Trash2 className="h-4 w-4" />
                         </Button>
@@ -230,23 +231,6 @@ const Appointment = () => {
                             <SelectItem value="denied">Annulés</SelectItem>
                         </SelectContent>
                     </Select>
-
-                    {/* Mobile Actions - on right side */}
-                    <div className="flex items-center gap-1.5 sm:hidden">
-                        {selectedIds.length > 0 && (
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={handleDeleteMultiple}
-                                className="h-8 w-8 rounded-full text-rose-500 hover:bg-rose-50 animate-in zoom-in-50"
-                            >
-                                <Trash2 className="h-4 w-4 rotate-12" />
-                            </Button>
-                        )}
-                        <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="rounded-full h-8 w-8 text-[#2A2A2A]">
-                            <ArrowLeft className="h-4 w-4" />
-                        </Button>
-                    </div>
                 </div>
             </nav>
 
@@ -266,15 +250,21 @@ const Appointment = () => {
                 </div>
             )}
 
-            <main className="max-w-4xl mx-auto px-4 animate-fade-in">
-                <header className="mb-8 text-center">
-                    <h1 className="font-serif text-3xl font-light">
-                        Flux <span className="italic">Réservations</span>
-                    </h1>
-                    <div className="flex items-center justify-center gap-4 mt-4 text-[10px] font-bold text-[#8A9A8A] uppercase tracking-widest">
-                        <span>Site Web</span>
-                        <div className="w-1 h-1 rounded-full bg-[#8A9A8A]" />
-                        <span>{appointments.length} Total</span>
+            <main className="max-w-4xl mx-auto px-4 animate-fade-in pt-6 relative">
+                <header className="mb-8 flex flex-col items-start">
+                    <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="mb-4 rounded-full gap-2 text-[#8A9A8A] hover:bg-[#8A9A8A]/10 px-4 -ml-2">
+                        <ArrowLeft className="h-4 w-4" />
+                        <span className="text-[10px] font-bold uppercase tracking-widest">Retour</span>
+                    </Button>
+                    <div className="w-full text-center sm:text-left">
+                        <h1 className="font-serif text-3xl font-light">
+                            Flux <span className="italic">Réservations</span>
+                        </h1>
+                        <div className="flex items-center justify-center sm:justify-start gap-4 mt-4 text-[10px] font-bold text-[#8A9A8A] uppercase tracking-widest">
+                            <span>Site Web</span>
+                            <div className="w-1 h-1 rounded-full bg-[#8A9A8A]" />
+                            <span>{appointments.length} Total</span>
+                        </div>
                     </div>
                 </header>
 
@@ -366,7 +356,7 @@ const Appointment = () => {
                     )}
                 </div>
             </main>
-        </div>
+        </div >
     );
 };
 
