@@ -1,12 +1,11 @@
-import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Smile, Frown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Link } from 'react-router-dom';
+import { config } from '@/config';
 
 const Satisfaction = () => {
-  const navigate = useNavigate();
 
   const handleSatisfaction = async () => {
     try {
@@ -17,7 +16,7 @@ const Satisfaction = () => {
     } catch (error) {
       console.error('An unexpected error occurred:', error);
     } finally {
-      navigate('/avis-google');
+      window.location.href = config.googleReviewLink;
     }
   };
 
@@ -32,7 +31,7 @@ const Satisfaction = () => {
         <div className="inline-block mb-8 p-4 rounded-2xl bg-white shadow-2xl shadow-primary/10 animate-float border border-primary/10 mx-auto">
           <img src="/Untitled-1.png" alt="DermaDoc Logo" className="h-16 w-16 object-contain" />
         </div>
-        
+
         {/* Headline */}
         <Card className="backdrop-blur-sm bg-white/70 dark:bg-black/20 border-primary/20 shadow-2xl max-w-3xl mx-auto">
           <CardHeader className="pb-4">
@@ -48,8 +47,8 @@ const Satisfaction = () => {
         {/* Buttons */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-16 max-w-2xl w-full">
           {/* Oui Button */}
-          <Button 
-            size="lg" 
+          <Button
+            size="lg"
             className="h-20 w-full text-xl md:text-2xl font-bold shadow-2xl shadow-primary/20 hover:shadow-primary/30 transition-all duration-300 rounded-2xl bg-primary text-primary-foreground border-2 border-primary/20 backdrop-blur-sm hover:scale-[1.02] active:scale-[0.98]"
             onClick={handleSatisfaction}
           >
@@ -59,9 +58,9 @@ const Satisfaction = () => {
 
           {/* Non Button */}
           <Link to="/feedback" className="group">
-            <Button 
-              variant="outline" 
-              size="lg" 
+            <Button
+              variant="outline"
+              size="lg"
               className="h-20 w-full text-xl md:text-2xl font-bold shadow-xl shadow-gray-200/50 hover:shadow-gray-300/50 transition-all duration-300 rounded-2xl border-2 hover:border-gray-300 backdrop-blur-sm hover:scale-[1.02] active:scale-[0.98]"
             >
               <Frown className="w-8 h-8 mr-3 group-hover:rotate-12 transition-transform duration-300" />

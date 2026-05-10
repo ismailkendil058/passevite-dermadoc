@@ -16,7 +16,6 @@ const Client = lazy(() => import("./pages/Client"));
 const Manager = lazy(() => import("./pages/Manager"));
 const Rendezvous = lazy(() => import("./pages/Rendezvous"));
 const Satisfaction = lazy(() => import("./pages/Satisfaction"));
-const AvisGoogle = lazy(() => import("./pages/AvisGoogle"));
 const Feedback = lazy(() => import("./pages/Feedback"));
 const Merci = lazy(() => import("./pages/Merci"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -83,7 +82,6 @@ const App = () => (
             <Route path="/appointment/login" element={<LoginAppointment />} />
             <Route path="/client" element={<Client />} />
             <Route path="/review" element={<Satisfaction />} />
-            <Route path="/avis-google" element={<AvisGoogle />} />
             <Route path="/feedback" element={<Feedback />} />
             <Route path="/merci" element={<Merci />} />
             <Route path="/accueil" element={
