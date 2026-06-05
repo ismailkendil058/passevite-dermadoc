@@ -1275,46 +1275,16 @@ const Rendezvous = () => {
                                     </div>
 
                                     <div className="p-0 sm:p-2">
-                                        <ScrollArea className="h-[650px] sm:h-[600px] px-2 sm:px-4">
-                                            <div className="relative min-h-[1050px] min-w-0">
-
-                                                {/* Time Background Grid Lines */}
-                                                <div className="absolute inset-0 pt-10 pointer-events-none">
-                                                    {['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'].map((t, idx) => (
-                                                        <div
-                                                            key={t}
-                                                            className="absolute left-0 w-full border-t border-muted/30 flex items-start"
-                                                            style={{ top: `${idx * 80 + 50}px` }}
-                                                        >
-                                                            <span className="text-[9px] font-black text-muted-foreground/30 -mt-2.5 bg-background pr-2 z-10 uppercase tracking-tighter">
-                                                                {t}
-                                                            </span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-
-                                                {/* Current Time Indicator */}
-                                                {newApptDate && format(newApptDate, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd') && (
-                                                    <div
-                                                        className="absolute left-0 right-0 border-t-2 border-rose-500/50 z-30 pointer-events-none flex items-center"
-                                                        style={{
-                                                            top: `${(new Date().getHours() - 8) * 80 + (new Date().getMinutes() / 60) * 80 + 50}px`,
-                                                            transition: 'top 60s linear'
-                                                        }}
-                                                    >
-                                                        <div className="w-2 h-2 rounded-full bg-rose-500 -ml-1 shadow-[0_0_10px_rgba(244,63,94,0.5)]" />
-                                                        <div className="ml-2 px-1.5 py-0.5 rounded bg-rose-500 text-[8px] font-black text-white uppercase tracking-widest shadow-lg">Maintenant</div>
-                                                    </div>
-                                                )}
-
+                                        <ScrollArea className="h-[400px] sm:h-[350px] px-2 sm:px-4">
+                                            <div className="relative pb-4">
                                                 {/* Doctor Columns */}
-                                                <div className={`ml-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 min-h-full ${selectedDoctorMobile === 'all' ? 'min-w-[700px] sm:min-w-0' : ''}`}>
+                                                <div className={`flex flex-wrap gap-4 ${selectedDoctorMobile === 'all' ? 'w-full' : ''}`}>
                                                     {doctors
                                                         .filter(d => selectedDoctorMobile === 'all' || d.id === selectedDoctorMobile)
                                                         .map(doctor => (
-                                                            <div key={doctor.id} className="relative min-h-[1000px] rounded-2xl bg-muted/5 border border-primary/5 overflow-hidden group/col">
+                                                            <div key={doctor.id} className="rounded-2xl bg-muted/5 border border-primary/5 overflow-hidden group/col flex-1 min-w-[250px]">
                                                                 {/* Column Sticky Header */}
-                                                                <div className="sticky top-0 z-10 bg-white/80 dark:bg-black/40 backdrop-blur-md p-3 border-b border-primary/5 text-center group-hover/col:bg-primary/5 transition-colors">
+                                                                <div className="bg-white/80 dark:bg-black/40 backdrop-blur-md p-3 border-b border-primary/5 text-center group-hover/col:bg-primary/5 transition-colors">
                                                                     <p className="text-[10px] text-primary font-black uppercase tracking-[0.2em] mb-0.5 opacity-60">Cabinet</p>
                                                                     <p className="font-black text-sm text-foreground italic flex items-center justify-center gap-2">
                                                                         <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
@@ -1323,7 +1293,7 @@ const Rendezvous = () => {
                                                                 </div>
 
                                                                 {/* Appointments for this doctor */}
-                                                                <div className="relative h-full pt-10">
+                                                                <div className="flex flex-wrap gap-2 p-3">
                                                                     {(() => {
                                                                         const dayStart = startOfDay(newApptDate || new Date()).getTime();
                                                                         const filteredAppts = parsedAppointments.filter(a =>
@@ -1332,58 +1302,38 @@ const Rendezvous = () => {
                                                                             a.startOfDayTime === dayStart
                                                                         );
 
-                                                                        // Group by hour
-                                                                        const hourGroups: Record<number, any[]> = {};
-                                                                        filteredAppts.forEach(a => {
-                                                                            const h = parseISO(a.appointment_at).getHours();
-                                                                            if (!hourGroups[h]) hourGroups[h] = [];
-                                                                            hourGroups[h].push(a);
-                                                                        });
+                                                                        if (filteredAppts.length === 0) {
+                                                                            return <p className="text-xs text-muted-foreground italic">Aucun RDV</p>;
+                                                                        }
 
-                                                                        return filteredAppts.map(appt => {
-                                                                            const date = parseISO(appt.appointment_at);
-                                                                            const h = date.getHours();
-                                                                            const m = date.getMinutes();
-                                                                            const offset = (h - 8) * 80 + (m / 60) * 80;
-
-                                                                            const group = hourGroups[h] || [];
-                                                                            const index = group.findIndex(a => a.id === appt.id);
-                                                                            const total = group.length;
-                                                                            const isOverlapping = total > 1;
-
-                                                                            return (
-                                                                                <div
-                                                                                    key={appt.id}
-                                                                                    className={`
-                                                                                        absolute p-3 rounded-2xl border-l-[6px] 
-                                                                                        shadow-xl shadow-primary/5 transition-all duration-300 
-                                                                                        hover:scale-[1.02] active:scale-95 z-20 cursor-pointer group
-                                                                                        bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border border-primary/5
-                                                                                        ${isOverlapping ? (index === 0 ? 'left-2 w-[calc(50%-12px)]' : 'right-2 w-[calc(50%-12px)]') : 'left-2 right-2'}
-                                                                                        ${appt.status === 'coming' ? 'border-l-emerald-500 shadow-emerald-500/10' :
-                                                                                            appt.status === 'denied' ? 'border-l-rose-500 shadow-rose-500/10' :
-                                                                                                appt.status === 'attended' ? 'border-l-blue-500 shadow-blue-500/10 opacity-75' :
-                                                                                                    'border-l-primary shadow-primary/10'}
-                                                                                    `}
-                                                                                    style={{ top: `${offset}px`, height: '75px' }}
-                                                                                    onClick={() => openEditModal(appt)}
-                                                                                >
-                                                                                    <div className="flex justify-between items-start mb-1">
-                                                                                        <span className={`text-[11px] font-black tracking-tighter italic ${appt.status === 'coming' ? 'text-emerald-600' : appt.status === 'denied' ? 'text-rose-600' : 'text-primary'}`}>
-                                                                                            {format(date, 'HH:mm')}
-                                                                                        </span>
-                                                                                        <div className={`w-1.5 h-1.5 rounded-full ${appt.status === 'coming' ? 'bg-emerald-500 animate-pulse' : 'bg-primary/20'}`} />
-                                                                                    </div>
-                                                                                    <p className="text-xs font-black text-foreground truncate uppercase tracking-tight">
-                                                                                        {appt.client_name}
-                                                                                    </p>
-                                                                                    <p className="text-[9px] text-muted-foreground font-bold mt-0.5 truncate flex items-center gap-1">
-                                                                                        <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
-                                                                                        {appt.notes || 'Sans note'}
-                                                                                    </p>
+                                                                        return filteredAppts.map(appt => (
+                                                                            <div
+                                                                                key={appt.id}
+                                                                                className={`
+                                                                                    p-2 rounded-xl border-l-[4px] 
+                                                                                    shadow-sm transition-all duration-300 
+                                                                                    hover:scale-[1.02] active:scale-95 cursor-pointer group
+                                                                                    bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border border-primary/5
+                                                                                    flex-1 min-w-[120px]
+                                                                                    ${appt.status === 'coming' ? 'border-l-emerald-500 shadow-emerald-500/10' :
+                                                                                        appt.status === 'denied' ? 'border-l-rose-500 shadow-rose-500/10' :
+                                                                                            appt.status === 'attended' ? 'border-l-blue-500 shadow-blue-500/10 opacity-75' :
+                                                                                                'border-l-primary shadow-primary/10'}
+                                                                                `}
+                                                                                onClick={() => openEditModal(appt)}
+                                                                            >
+                                                                                <div className="flex justify-between items-start mb-0.5">
+                                                                                    <div className={`w-1.5 h-1.5 rounded-full ${appt.status === 'coming' ? 'bg-emerald-500 animate-pulse' : 'bg-primary/20'}`} />
                                                                                 </div>
-                                                                            );
-                                                                        });
+                                                                                <p className="text-xs font-black text-foreground truncate uppercase tracking-tight">
+                                                                                    {appt.client_name}
+                                                                                </p>
+                                                                                <p className="text-[8px] text-muted-foreground font-bold mt-0.5 truncate flex items-center gap-1">
+                                                                                    <span className="w-0.5 h-0.5 rounded-full bg-muted-foreground/30" />
+                                                                                    {appt.notes || 'Sans note'}
+                                                                                </p>
+                                                                            </div>
+                                                                        ));
                                                                     })()}
                                                                 </div>
                                                             </div>
