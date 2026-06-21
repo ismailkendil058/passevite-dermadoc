@@ -884,7 +884,7 @@ const Rendezvous = () => {
                                 ) : (filterAppointmentOnly ? groupedPatients.filter(p => p.treatments.length === 0) : groupedPatients).length === 0 ? (
                                     <p className="text-center py-10 text-muted-foreground">{filterAppointmentOnly ? 'Aucun patient avec RDV uniquement' : 'Aucun patient trouvé'}</p>
                                 ) : (
-                                    (filterAppointmentOnly ? groupedPatients.filter(p => p.treatments.length === 0) : groupedPatients).map(patient => (
+                                    (filterAppointmentOnly ? groupedPatients.filter(p => p.treatments.length === 0) : groupedPatients.filter(p => p.treatments.length > 0)).map(patient => (
                                         <Card key={`${patient.phone}_${patient.name}`} onClick={() => { setViewingPatient({ phone: patient.phone, name: patient.name }); setSelectedTreatment(null); }} className="cursor-pointer hover:border-primary/30 hover:bg-primary/[0.02] transition-all group">
                                             <CardContent className="p-4 flex items-center justify-between">
                                                 <div className="space-y-1">
