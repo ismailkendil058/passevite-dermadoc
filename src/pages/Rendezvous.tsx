@@ -93,6 +93,7 @@ const Rendezvous = () => {
     const [showAddAppt, setShowAddAppt] = useState(false);
     const [isBaseInfoOpen, setIsBaseInfoOpen] = useState(false);
     const [isDeletingPatient, setIsDeletingPatient] = useState(false);
+    const [filterAppointmentOnly, setFilterAppointmentOnly] = useState(false);
     const [baseInfo, setBaseInfo] = useState({ name: '', phone: '', client_id: '' });
     const [newVisitData, setNewVisitData] = useState<Partial<CompletedClient & { apptDate: Date; apptTime: string; apptDoctor: string; apptNotes: string }>>({
         client_name: '',
@@ -270,26 +271,33 @@ const Rendezvous = () => {
             return;
         }
 
+        if (!viewingPatient) {
+            toast.error('Informations patient d\'origine manquantes');
+            return;
+        }
+
         try {
-            // Update ALL records with this client_id to maintain dossier integrity
+            // Update ALL records with this client's original name and phone to maintain dossier integrity
             const { error } = await supabase
                 .from('completed_clients')
                 .update({
                     client_name: baseInfo.name,
                     phone: baseInfo.phone
                 })
-                .eq('client_id', baseInfo.client_id);
+                .eq('phone', viewingPatient.phone)
+                .ilike('client_name', viewingPatient.name);
 
             if (error) throw error;
 
-            // Also update any appointments with the old phone
+            // Also update any appointments with the old phone and name
             await supabase
                 .from('appointments')
                 .update({
                     client_name: baseInfo.name,
                     client_phone: baseInfo.phone
                 })
-                .eq('client_phone', viewingPatient?.phone);
+                .eq('client_phone', viewingPatient.phone)
+                .ilike('client_name', viewingPatient.name);
 
             toast.success('Informations patient mises à jour');
             setIsBaseInfoOpen(false);
@@ -423,9 +431,21 @@ const Rendezvous = () => {
             .sort((a, b) => a.client_name.localeCompare(b.client_name));
     }, [clients]);
 
+    // Filter appointments in memory by search query
+    const filteredAppointments = useMemo(() => {
+        const query = searchQuery.trim().toLowerCase();
+        if (!query) return appointments;
+        return appointments.filter(a =>
+            (a.client_name || '').toLowerCase().includes(query) ||
+            (a.client_phone || '').toLowerCase().includes(query)
+        );
+    }, [appointments, searchQuery]);
+
     // Group by patient (phone + name) to build dossier entries with multiple treatments
     const groupedPatients = useMemo(() => {
-        const map = new Map<string, { name: string; phone: string; treatments: Array<{ treatment: string; latest: CompletedClient; totalPaid: number }> }>();
+        const map = new Map<string, { name: string; phone: string; treatments: Array<{ treatment: string; latest: CompletedClient; totalPaid: number }>; latestVisitDate?: string; latestApptDate?: string }>();
+        
+        // 1. Group completed clients
         uniqueClients.forEach(c => {
             const key = `${c.phone}_${c.client_name.toLowerCase().trim()}`;
             const existing = map.get(key);
@@ -433,14 +453,37 @@ const Rendezvous = () => {
                 map.set(key, {
                     name: c.client_name,
                     phone: c.phone,
-                    treatments: [{ treatment: c.treatment || '—', latest: c, totalPaid: (c as any).totalPaid || 0 }]
+                    treatments: [{ treatment: c.treatment || '—', latest: c, totalPaid: (c as any).totalPaid || 0 }],
+                    latestVisitDate: c.completed_at
                 });
             } else {
                 existing.treatments.push({ treatment: c.treatment || '—', latest: c, totalPaid: (c as any).totalPaid || 0 });
+                if (!existing.latestVisitDate || new Date(c.completed_at) > new Date(existing.latestVisitDate)) {
+                    existing.latestVisitDate = c.completed_at;
+                }
             }
         });
+
+        // 2. Merge appointments
+        filteredAppointments.forEach(a => {
+            const key = `${a.client_phone}_${a.client_name.toLowerCase().trim()}`;
+            const existing = map.get(key);
+            if (!existing) {
+                map.set(key, {
+                    name: a.client_name,
+                    phone: a.client_phone,
+                    treatments: [],
+                    latestApptDate: a.appointment_at
+                });
+            } else {
+                if (!existing.latestApptDate || new Date(a.appointment_at) > new Date(existing.latestApptDate)) {
+                    existing.latestApptDate = a.appointment_at;
+                }
+            }
+        });
+
         return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
-    }, [uniqueClients]);
+    }, [uniqueClients, filteredAppointments]);
 
     const filteredClients = uniqueClients; // keep for other uses
 
@@ -799,6 +842,14 @@ const Rendezvous = () => {
                                         className="pl-10 h-12 rounded-xl"
                                     />
                                 </div>
+                                <Button
+                                    variant={filterAppointmentOnly ? 'default' : 'outline'}
+                                    size="sm"
+                                    className={`h-10 rounded-xl text-xs gap-2 whitespace-nowrap ${filterAppointmentOnly ? 'bg-primary text-primary-foreground' : ''}`}
+                                    onClick={() => setFilterAppointmentOnly(!filterAppointmentOnly)}
+                                >
+                                    <CalendarIcon className="h-3.5 w-3.5" /> RDV uniquement
+                                </Button>
                                 {['manager', 'admin', 'receptionist'].includes(userRole || '') && (
                                     <Button
                                         className="w-full sm:w-auto h-12 rounded-xl px-6 gap-2 shadow-lg shadow-primary/20"
@@ -830,20 +881,43 @@ const Rendezvous = () => {
                             <div className="grid gap-2">
                                 {loading ? (
                                     <p className="text-center py-10 text-muted-foreground">Chargement...</p>
-                                ) : groupedPatients.length === 0 ? (
-                                    <p className="text-center py-10 text-muted-foreground">Aucun patient trouvé</p>
+                                ) : (filterAppointmentOnly ? groupedPatients.filter(p => p.treatments.length === 0) : groupedPatients).length === 0 ? (
+                                    <p className="text-center py-10 text-muted-foreground">{filterAppointmentOnly ? 'Aucun patient avec RDV uniquement' : 'Aucun patient trouvé'}</p>
                                 ) : (
-                                    groupedPatients.map(patient => (
+                                    (filterAppointmentOnly ? groupedPatients.filter(p => p.treatments.length === 0) : groupedPatients).map(patient => (
                                         <Card key={`${patient.phone}_${patient.name}`} onClick={() => { setViewingPatient({ phone: patient.phone, name: patient.name }); setSelectedTreatment(null); }} className="cursor-pointer hover:border-primary/30 hover:bg-primary/[0.02] transition-all group">
                                             <CardContent className="p-4 flex items-center justify-between">
                                                 <div className="space-y-1">
                                                     <p className="font-bold text-foreground group-hover:text-primary transition-colors">{patient.name}</p>
-                                                    <p className="text-xs text-muted-foreground">{patient.phone} · <span className="text-primary/70">{patient.treatments.map(t => t.treatment).slice(0, 2).join(', ')}</span></p>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {patient.phone}
+                                                        {patient.treatments.length > 0 && (
+                                                            <>
+                                                                {' · '}
+                                                                <span className="text-primary/70">{patient.treatments.map(t => t.treatment).slice(0, 2).join(', ')}</span>
+                                                            </>
+                                                        )}
+                                                        {patient.treatments.length === 0 && (
+                                                            <>
+                                                                {' · '}
+                                                                <span className="text-muted-foreground/60 italic">Rendez-vous uniquement</span>
+                                                            </>
+                                                        )}
+                                                    </p>
                                                 </div>
                                                 <div className="flex items-center gap-3">
                                                     <div className="text-right hidden sm:block">
-                                                        <p className="text-[10px] text-muted-foreground uppercase font-medium">Dernière visite</p>
-                                                        <p className="text-xs font-semibold">{format(parseISO(patient.treatments[0]?.latest.completed_at || new Date().toISOString()), 'dd/MM/yyyy')}</p>
+                                                        <p className="text-[10px] text-muted-foreground uppercase font-medium">
+                                                            {patient.latestVisitDate ? 'Dernière visite' : 'Dernier RDV'}
+                                                        </p>
+                                                        <p className="text-xs font-semibold">
+                                                            {patient.latestVisitDate 
+                                                                ? format(parseISO(patient.latestVisitDate), 'dd/MM/yyyy') 
+                                                                : (patient.latestApptDate 
+                                                                    ? format(parseISO(patient.latestApptDate), 'dd/MM/yyyy') 
+                                                                    : '—')
+                                                            }
+                                                        </p>
                                                     </div>
                                                     <Plus className="h-5 w-5 text-muted-foreground group-hover:text-primary" />
                                                 </div>
