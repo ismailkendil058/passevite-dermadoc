@@ -47,12 +47,27 @@ const Manager = () => {
     const toDate = new Date(dateTo);
     toDate.setHours(23, 59, 59, 999);
 
-    const { data } = await supabase
-      .from('completed_clients')
-      .select('*, doctor:doctors(*)')
-      .gte('completed_at', fromDate.toISOString())
-      .lte('completed_at', toDate.toISOString())
-      .order('completed_at', { ascending: false });
+    // Fetch in batches to avoid Supabase's default 1000-row limit
+    let allClients: any[] = [];
+    let from = 0;
+    const batchSize = 1000;
+    while (true) {
+      const { data: batch } = await supabase
+        .from('completed_clients')
+        .select('*, doctor:doctors(*)')
+        .gte('completed_at', fromDate.toISOString())
+        .lte('completed_at', toDate.toISOString())
+        .order('completed_at', { ascending: false })
+        .range(from, from + batchSize - 1);
+      if (batch && batch.length > 0) {
+        allClients = allClients.concat(batch);
+        if (batch.length < batchSize) break;
+        from += batchSize;
+      } else {
+        break;
+      }
+    }
+    const data = allClients;
 
     if (data) {
       const uniqueIds = [...new Set(data.map(d => d.receptionist_id))];
@@ -70,11 +85,25 @@ const Manager = () => {
       })));
     }
 
-    const { data: expData } = await supabase
-      .from('expenses')
-      .select('amount')
-      .gte('date', dateFrom)
-      .lte('date', dateTo);
+    // Fetch expenses in batches to avoid Supabase's default 1000-row limit
+    let allExpenses: any[] = [];
+    let expFrom = 0;
+    while (true) {
+      const { data: expBatch } = await supabase
+        .from('expenses')
+        .select('amount')
+        .gte('date', dateFrom)
+        .lte('date', dateTo)
+        .range(expFrom, expFrom + batchSize - 1);
+      if (expBatch && expBatch.length > 0) {
+        allExpenses = allExpenses.concat(expBatch);
+        if (expBatch.length < batchSize) break;
+        expFrom += batchSize;
+      } else {
+        break;
+      }
+    }
+    const expData = allExpenses;
 
     if (expData) {
       setTotalExpenses(expData.reduce((s, e) => s + (e.amount || 0), 0));
