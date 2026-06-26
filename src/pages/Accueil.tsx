@@ -218,6 +218,8 @@ const Accueil = () => {
   const [newDoctorId, setNewDoctorId] = useState('');
   const [linkedAppointmentId, setLinkedAppointmentId] = useState<string | null>(null);
   const [foundAppointments, setFoundAppointments] = useState<any[]>([]);
+  const [patientSuggestions, setPatientSuggestions] = useState<any[]>([]);
+  const [showPatientSuggestions, setShowPatientSuggestions] = useState(false);
 
   // Complete form
   const [clientName, setClientName] = useState('');
@@ -318,6 +320,48 @@ const Accueil = () => {
       setLinkedAppointmentId(null);
     }
   };
+
+  // Search for existing patients (from completed_clients) when in Nouveau state and typing phone only
+  React.useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      const searchPatients = async () => {
+        const hasEnoughPhoneChars = newPhone.trim().length >= 3;
+
+        if (newState === 'N' && hasEnoughPhoneChars) {
+          try {
+            const { data } = await supabase
+              .from('completed_clients')
+              .select('client_name, phone, doctor:doctors(name)')
+              .ilike('phone', `%${newPhone.trim()}%`)
+              .order('completed_at', { ascending: false })
+              .limit(10);
+
+            // Deduplicate by phone + name
+            const seen = new Set<string>();
+            const unique = (data || []).filter((item: any) => {
+              const key = `${item.phone}||${item.client_name}`;
+              if (seen.has(key)) return false;
+              seen.add(key);
+              return true;
+            });
+            setPatientSuggestions(unique);
+            setShowPatientSuggestions(unique.length > 0);
+          } catch (err) {
+            console.error('Error searching patients:', err);
+            setPatientSuggestions([]);
+            setShowPatientSuggestions(false);
+          }
+        } else {
+          setPatientSuggestions([]);
+          setShowPatientSuggestions(false);
+        }
+      };
+
+      searchPatients();
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [newPhone, newState]);
 
   // Search for appointment when phone, name or state changes with debounce
   React.useEffect(() => {
@@ -1047,6 +1091,58 @@ const Accueil = () => {
               type="tel"
               className="h-11 sm:h-12"
             />
+
+            {showPatientSuggestions && patientSuggestions.length > 0 && newState === 'N' && !linkedAppointmentId && (
+              <div className="space-y-2 p-3 bg-emerald-50/50 border border-emerald-100 rounded-xl animate-in fade-in slide-in-from-top-2">
+                <p className="text-[10px] font-black uppercase text-emerald-600 tracking-widest flex items-center gap-1.5 px-1">
+                  <Sparkles className="h-3 w-3" /> Patients existants :
+                </p>
+                <div className="flex flex-col gap-1.5">
+                  {patientSuggestions.map((patient, idx) => (
+                    <Button
+                      key={`${patient.phone}-${patient.client_name}-${idx}`}
+                      variant="outline"
+                      size="sm"
+                      className="justify-start h-auto py-2.5 px-3 text-left border-emerald-100 bg-white hover:bg-emerald-50 hover:border-emerald-200 transition-all rounded-lg group"
+                      onClick={() => {
+                        setNewPatientName(patient.client_name);
+                        setNewPhone(patient.phone);
+                        if (patient.doctor?.name) {
+                          const doc = doctors.find(d => d.name === patient.doctor.name);
+                          if (doc) setNewDoctorId(doc.id);
+                        }
+                        setPatientSuggestions([]);
+                        setShowPatientSuggestions(false);
+                        toast.success(`Patient sélectionné : ${patient.client_name}`);
+                      }}
+                    >
+                      <div className="flex items-center gap-3 w-full">
+                        <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+                          <Users className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="font-bold text-slate-900 truncate">{patient.client_name}</p>
+                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-0 bg-emerald-50 text-emerald-600">
+                              Existant
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
+                            <span>{patient.phone}</span>
+                            {patient.doctor?.name && (
+                              <>
+                                <span>•</span>
+                                <span className="truncate">{patient.doctor.name}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {foundAppointments.length > 0 && !linkedAppointmentId && (
               <div className="space-y-2 p-3 bg-blue-50/50 border border-blue-100 rounded-xl animate-in fade-in slide-in-from-top-2">
