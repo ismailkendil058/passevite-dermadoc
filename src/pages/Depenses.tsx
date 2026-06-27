@@ -61,6 +61,13 @@ const Depenses = () => {
 
     useEffect(() => {
         fetchExpenses();
+
+        const channel = supabase
+            .channel('expenses-updates')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, () => fetchExpenses())
+            .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
     }, [dateFrom, dateTo]);
 
     const handleAddExpense = async (e: React.FormEvent) => {

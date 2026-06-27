@@ -115,6 +115,15 @@ const MedecinDashboard = () => {
     useEffect(() => {
         if (doctorInfo) {
             fetchDashboardData();
+
+            const channel = supabase
+                .channel('medecin-dashboard-updates')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'prescriptions' }, () => fetchDashboardData())
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, () => fetchDashboardData())
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'completed_clients' }, () => fetchDashboardData())
+                .subscribe();
+
+            return () => { supabase.removeChannel(channel); };
         }
     }, [doctorInfo]);
 

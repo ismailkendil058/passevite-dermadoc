@@ -46,6 +46,13 @@ const Factures = () => {
 
     useEffect(() => {
         fetchInvoices();
+
+        const channel = supabase
+            .channel('invoices-updates')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, () => fetchInvoices())
+            .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
     }, [dateFrom, dateTo]);
 
     const filteredInvoices = useMemo(() => {

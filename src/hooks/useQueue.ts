@@ -196,12 +196,12 @@ export function useQueue() {
     return () => { supabase.removeChannel(channel); };
   }, [fetchActiveSession]);
 
-  const openSession = async (userId: string) => {
-    // Close any active sessions first
+  const openSession = async (_userId?: string) => {
+    // Close any active sessions first (custom auth = anon role, so no RLS check needed)
     await supabase.from('sessions').update({ is_active: false, closed_at: new Date().toISOString() }).eq('is_active', true);
     const { data, error } = await supabase
       .from('sessions')
-      .insert({ opened_by: userId })
+      .insert({ is_active: true })
       .select()
       .single();
     if (data) {
@@ -293,7 +293,7 @@ export function useQueue() {
     treatment: string,
     totalAmount: number,
     tranchePaid: number,
-    receptionistId: string,
+    _receptionistId?: string,
     notes?: string
   ) => {
     // Find entry from either waiting or in_cabinet list
@@ -312,7 +312,6 @@ export function useQueue() {
       treatment,
       total_amount: totalAmount,
       tranche_paid: tranchePaid,
-      receptionist_id: receptionistId,
       appointment_id: entry.appointment_id,
       notes: notes?.trim() || null,
     });

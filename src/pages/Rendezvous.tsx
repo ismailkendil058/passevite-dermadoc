@@ -154,7 +154,7 @@ const Rendezvous = () => {
             q = q.or(`client_name.ilike.%${searchQuery.trim()}%,phone.ilike.%${searchQuery.trim()}%`);
         }
 
-        q = q.order('completed_at', { ascending: false }).limit(200);
+        q = q.order('completed_at', { ascending: false });
 
         const { data } = await q;
         if (data) setClients(data as any);
@@ -388,6 +388,14 @@ const Rendezvous = () => {
                 { event: '*', schema: 'public', table: 'appointments' },
                 () => {
                     fetchInitialData();
+                }
+            )
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'completed_clients' },
+                () => {
+                    fetchInitialData();
+                    fetchClients();
                 }
             )
             .subscribe();

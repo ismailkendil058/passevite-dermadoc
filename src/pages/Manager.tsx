@@ -118,7 +118,17 @@ const Manager = () => {
     });
   }, []);
 
-  useEffect(() => { fetchData(); }, [dateFrom, dateTo]);
+  useEffect(() => {
+    fetchData();
+
+    const channel = supabase
+      .channel('manager-updates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'completed_clients' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, () => fetchData())
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [dateFrom, dateTo]);
 
   const treatments = useMemo(() => {
     const set = new Set(clients.map(c => c.treatment));
