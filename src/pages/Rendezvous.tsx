@@ -119,18 +119,40 @@ const Rendezvous = () => {
         setLoading(true);
         try {
             await fetchActiveSession();
-            // Fetch Appointments
-            const { data: apptsData } = await supabase
-                .from('appointments')
-                .select('*, doctor:doctors(*)')
-                .order('appointment_at', { ascending: true });
+            
+            // Fetch Appointments in chunks of 1000 to bypass PostgREST pagination limit
+            let allAppts: any[] = [];
+            let from = 0;
+            const limit = 1000;
+            let hasMore = true;
+
+            while (hasMore) {
+                const { data: chunk, error: apptErr } = await supabase
+                    .from('appointments')
+                    .select('*, doctor:doctors(*)')
+                    .order('appointment_at', { ascending: true })
+                    .range(from, from + limit - 1);
+                
+                if (apptErr) throw apptErr;
+                
+                if (chunk && chunk.length > 0) {
+                    allAppts = [...allAppts, ...chunk];
+                    if (chunk.length < limit) {
+                        hasMore = false;
+                    } else {
+                        from += limit;
+                    }
+                } else {
+                    hasMore = false;
+                }
+            }
 
             // Fetch Doctors
             const { data: docsData } = await supabase
                 .from('doctors')
                 .select('*');
 
-            if (apptsData) setAppointments(apptsData as any);
+            setAppointments(allAppts as any);
             if (docsData) {
                 setDoctors(docsData as any);
                 if (docsData.length > 0 && window.innerWidth < 640) {
